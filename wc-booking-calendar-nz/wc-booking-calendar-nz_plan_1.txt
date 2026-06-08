@@ -1,0 +1,80 @@
+**Custom WooCommerce Booking Plugin Outline: Generic & Configurable**  
+**Document: Custom_Booking_Plugin_Outline.docx** (attached below for download and editing).
+
+This document outlines a complete, production-ready custom WordPress plugin designed for generic reuse. It emphasizes configurability through admin settings, minimal external dependencies, and clean architecture for maintainability and future extensions.
+
+### Plugin Name & High-Level Specs
+**Plugin Name**: wc-booking-calendar-nz 
+**Description**: Advanced bookable products for WooCommerce with configurable time slots, resources, person types, conditional logic, and availability management.  
+**Version**: 1.0  
+**License**: GPLv2+ (for your use/distribution if desired).  
+**Requirements**: WordPress 6+, WooCommerce 9+, PHP 8.0+.
+**Author**: E Craig, New Zealand, web: DigitalEuan.com email: info@digitaleuan.com
+
+### Core Features
+- **Booking Modes**: Configurable types (e.g., "Guided Tour", "Self-Directed Walk"). Each mode links to custom rules.
+- **Person Types**: Dynamic fields for Adults, 5–15 years, Under 5 with real-time price calculation and tally on frontend.
+- **Time Slots**: Per-day-of-week slots (e.g., 10–12pm morning, 3pm afternoon). Admin UI to add/edit slots globally or per product.
+- **Resource Management**: CPT for resources (e.g., "Guy" as guide). Guided mode consumes full-day capacity; Self-Directed uses minimal/no block.
+- **Conditional Logic**:
+  - Guided → Add "Morning Tea" option or other add-ons (hidden if not used) + full-day block out.
+  - Self-Directed → Multiple bookings per slot allowed.
+  - Limited Mobility checkbox → Custom message + notification email.
+- **Pricing & Taxes**: Per-person, dynamic totals. GST included/not included (Woo tax integration). Buffers, minimums, seasonal pricing.
+- **Availability Engine**: Calendar backend preventing overbooking. Rules engine (dates, days, resources).
+- **Frontend**: Date/time picker, live updates, add-to-cart. Shortcodes/Elementor widgets for product pages and dedicated booking calendar view.
+- **Admin**: Unified calendar dashboard, booking list, reports, manual overrides.
+- **Notifications**: Emails for confirmations, reminders, special requests.
+- **Extensibility**: Hooks for add-ons (gift cards, physical items), Google Calendar sync, multi-location.
+
+**Edge Cases Covered**: Time zones (NZ), cancellations, minimum/maximum group sizes, sold-out handling, mobile responsiveness, no-show policies.
+
+### Plugin File Structure (Standard & Organized)
+```
+wc-booking-calendar/
+├── wc-booking-calendar.php          # Main plugin file (header, activation, init)
+├── includes/
+│   ├── class-booking-product.php    # Extends WC_Product for bookable type
+│   ├── class-resource-cpt.php       # Custom post type for staff/resources
+│   ├── class-booking-cpt.php        # Stores individual bookings
+│   ├── class-availability-manager.php # Core logic for slots, blocking, rules
+│   ├── class-frontend-handler.php   # Forms, live pricing, shortcodes
+│   ├── class-admin-settings.php     # Config pages
+│   └── hooks.php                    # WooCommerce & WP actions/filters
+├── admin/
+│   ├── assets/                      # CSS/JS for admin calendar
+│   └── templates/                   # Settings pages
+├── public/
+│   ├── assets/                      # Frontend CSS/JS (tally calculator, calendar picker)
+│   └── templates/                   # Overridable booking form templates
+├── languages/                       # .pot for translations
+└── readme.txt                       # detailed readme documenting how and where to change variables + updates
+```
+
+### Key Technical Implementation
+1. **Product Integration**: Register custom product type "bookable_tour". Use Woo hooks (`woocommerce_product_data_tabs`, `woocommerce_add_to_cart`).
+2. **Availability Logic** (Central Class):
+   - Store rules in post meta or custom tables.
+   - Query for conflicts based on mode/resource/date/time.
+   - Guided: Mark full day as partially/fully booked for that resource.
+   - Self-Directed: Capacity-based (e.g., multiple per slot).
+3. **Frontend Dynamics**: JavaScript for person count → price tally (AJAX for availability check).
+4. **Admin Settings**:
+   - General: Time slots, days of week.
+   - Modes: Define modes + linked conditions (JSON-like config for flexibility).
+   - Resources: Add/edit with schedules.
+5. **WooCommerce Hooks**:
+   - `woocommerce_before_calculate_totals` for dynamic pricing.
+   - Custom cart item data for booking details.
+   - Order processing to create booking records and update availability.
+
+### Configuration Approach (Easy for Reuse)
+- Dedicated **Settings → Booking Calendar** menu.
+- Tabs: General, Time Slots, Booking Modes, Resources, Notifications, Advanced.
+- Example: For a new business, select "Tour Operator" preset → Adjust slots/modes.
+- Export/Import settings for cloning across sites.
+
+
+**Testing Plan**: Unit tests (PHPUnit), manual ( Guided vs Self, limited mobility, peak days), load testing.
+
+**Security & Best Practices**: Nonces, sanitization, capability checks, data validation. Use transients/caching for performance.

@@ -1,0 +1,326 @@
+# wc-booking-calendar-nz notes.
+
+## Basic files created:
+
+/wc-booking-calendar-nz.php
+Complete Plugin Header - All required metadata
+Activation/Deactivation Hooks - Database tables, default options
+Requirements Checking - WordPress 6+, PHP 8.0+, WooCommerce 9+
+Database Tables - Bookings and availability tables created on activation
+Autoloading - Includes all PHP files from includes/, admin/, public/
+Component Initialization - Admin, Frontend, WooCommerce integration
+Error Handling - WooCommerce missing notice
+Translation Support - Text domain loaded
+
+includes/class-availability-manager.php
+Full availability checking - Date, time, resource, mode, capacity
+Resource management - Full-day blocks for guided tours
+Mode configuration - Guided vs Self-directed handling
+Product rules - Per-product availability restrictions
+General rules - Lead time, advance booking, tracking** - Real-time booked count
+Availability updates - On booking/cancellation
+Caching - Transient-based caching for performance
+Export/Import - Settings migration
+Reporting - Booking statistics
+
+includes/class-booking-product.php
+Pricing (base price, GST)
+Resources (requires resource)
+Conditional Logic (JSON configuration)
+Meta Saving - All booking-related data saved to post meta
+Price Calculation - Per-person pricing with person type adjustments
+Frontend Display - Booking info, person type selectors, live price
+Template Override - Custom templates for booking products
+Admin Helpers - Product list actions, query methods
+
+includes/class-frontend-handler.php
+AJAX Availability Check - Real-time slot availability
+Price Calculation - Per-person types, GST, peak pricing
+Add to Cart Integration - Validation, data storage, cart display
+Shortcodes - wc_booking_form and wc_booking_calendar
+Form Display - Date picker, time slots, person types, resources
+Frontend Assets - CSS/JS with localization
+Template Overrides - Custom booking form templates
+Form Processing - Nonce validation, error handling
+Resource Selection - Guide/resource dropdown
+Limited Mobility - Checkbox with special message
+Special Requests - Textarea for additional info
+AJAX Endpoints:
+wc_booking_check_availability - Check specific slot
+wc_booking_calculate_price - Calculate total price
+wc_booking_get_slots - Get all available slots for a date
+Frontend Form:
+selection
+Person type counters
+Limited mobility checkbox
+Special requests textarea
+Live price display
+Add to cart button
+
+public/assets/js/frontend.js
+Date Picker Initialization
+jQuery UI datepicker with min/max dates
+NZ time zone handling
+Date selection triggers slot loading
+Event Listeners
+Date change → Load slots
+Time change → Check availability & calculate price
+Resource change → Reload slots
+Person count change → Recalculate price
+Limited mobility toggle → Show/hide message
+Add to cart click → Process booking
+AJAX Calls
+wc_booking_get_slots - Load available time slots
+wc_booking_calculate_price - Calculate total price
+wc_booking_check_availability - Check if slot is available
+wc_booking_add_to_cart - Add booking to cart
+Price Calculation
+Collect person type counts
+AJAX price calculation
+Format currency display
+Update breakdown (placeholder for detailed view)
+Availability Checking
+Real-time availability status
+Visual feedback (available/unavailable)
+Form Validation
+Required field checks
+Person type validation
+Resource validation
+Error messages
+Add to Cart
+Collect all form data
+AJAX submission
+Success/error handling
+Button state management
+
+public/assets/css/frontend.css
+Form Layout - Clean, modern design with proper spacing
+Date Picker - Styled input fields
+Time Slots - Custom dropdown with arrow icons
+Person Type Inputs - Row-based layout with hover effects
+Resource Selection - Styled select dropdowns
+Limited Mobility - Yellow-themed warning box
+Special Requests - Textarea with proper sizing
+Price Display - Large, prominent price display
+Add to Cart Button - Full-width, accessible button
+Confirmation Message - Green success box
+Availability Status - Color-coded indicators
+Responsive Design - Mobile-first with breakpoints at 768px and 480px
+Loading States - Disabled states during AJAX calls
+Error/Success Messages - Styled feedback boxes
+Accessibility - Proper font sizes, focus states
+Animations - Smooth transitions and slide-down effects
+Print Styles - Hide buttons when printing
+
+public/templates/single-product/booking-form.php
+Security - Nonce field for AJAX requests
+Hidden Fields - Product ID, booking mode
+Booking Description - Displayed if set in product settings
+Date Picker - With min/max dates based on product settings
+Time Slots - Dropdown populated by AJAX
+Resource Selection - Conditionally shown based on product requirements
+Person Type Inputs - All configured person types with age ranges
+Limited Mobility - Checkbox with special message
+Special Requests - Textarea for additional information
+Price Display - Dynamic price shown and updated by JS
+Add to Cart Button - Full-width, accessible
+Availability Status - Hidden, shown by JavaScript
+Confirmation Message - Success feedback
+Error/Success Areas - For validation messages
+Responsive Classes - All classes match CSS file
+WooCommerce Integration - Hooked into product page
+
+includes/class-resource-cpt.php
+CPT Registration - Full custom post type with labels, icons, and settings
+Admin Menu - Dedicated resources page with list table
+Meta Boxes:
+Resource Details (email, phone, bio, avatar, status)
+Availability & Schedule (per-day schedule, lead time, advance booking)
+Pricing (hourly rate, flat fee)
+Schedule Management - Per-day availability with start/end times
+REST API - GET endpoints for resources
+Columns - Custom list table columns
+Capabilities - Permission mapping
+Helper Methods:
+get_available_resources() - Get all available resources
+is_resource_available() - Check availability for a date
+get_resource_by_id() - Get resource object
+
+includes/class-admin-settings.php
+Settings Page - Under Settings > Booking Calendar
+Multiple Tabs/Sections:
+General Settings (timezone, GST, group sizes)
+Time Slots (visual manager + JSON editor)
+Booking Modes (JSON editor)
+Person Types (JSON editor)
+Notifications (email settings)
+Advanced (peak days, lead time, seasonal pricing)
+Visual Time Slots Manager - Table-based slot editor
+Days of Week Configuration - Checkbox-based
+Export/Import - JSON export and import functionality
+Presets - Quick-start configurations (Tour Operator, Activity Provider)
+Security - Nonce verification, capability checks
+Helper Methods - All settings sanitization and validation
+
+includes/class-booking-cpt.php
+CPT Registration - Full custom post type for bookings
+Admin Menu - Dedicated bookings page with list table and calendar view
+Meta Boxes:
+Booking Details (product, date, time, resource, mode, special requests)
+Person Types (breakdown table)
+Status & Actions (quick status changes)
+Status Management - Automatic availability updates on status change
+REST API - GET endpoints for bookings
+Columns - Custom list table columns
+Helper Methods:
+create_booking_from_order() - Create booking from WooCommerce order
+get_bookings_by_date_range() - Query by date range
+get_bookings_by_product() - Query by product
+get_booking_data() - Get all booking data
+generate_booking_id() - Generate unique booking ID
+
+includes/hooks.php
+Cart Validation - Validates booking fields before adding to cart
+Cart Item Data - Adds booking details to cart display
+Add to Cart - Processes booking data and calculates price
+Remove from Cart - Handles cart item removal
+Price Calculation - Dynamic pricing based on person types, date, GST
+Order Processing - Creates booking CPT from WooCommerce order
+Order Status Changes - Updates availability on status changes
+Order Completed/Cancelled - Sends emails and updates bookings
+Order Actions - Confirm/Cancel booking actions
+Checkout AJAX - Real-time price calculation
+Email Notifications - Confirmation, cancellation, reminder emails
+Product Page Integration - Displays booking form on product pages
+
+admin/class-admin.php
+Calendar View
+Monthly calendar grid
+Booking dots by status
+Navigation controls
+Day detail view
+Legend
+Reports Page
+Statistics cards (total, confirmed, pending, cancelled, revenue, average)
+Recent bookings table
+Monthly chart placeholder
+AJAX Handlers
+Get bookings for date range
+Update booking status
+Delete booking
+Get availability
+Export bookings
+REST API
+GET all bookings
+GET single booking
+PUT update booking
+Permission checks
+Admin Assets
+Enqueue scripts/styles
+Localize JavaScript
+Helper Methods
+get_bookings_for_date_range()
+get_booking_statistics()
+prepare_booking_data()
+
+admin/assets/js/admin.js
+Calendar Rendering
+Monthly calendar grid
+Day cells with booking dots
+Today highlighting
+Navigation controls (prev/next/today)
+Event Listeners
+Month navigation
+Day click to show details
+Update booking status
+Delete booking
+Export bookings
+AJAX Operations
+Load bookings for month
+Update booking status
+Delete booking
+Export bookings to CSV
+Day Details View
+Show bookings for selected day
+Display all booking information
+Quick actions (confirm/cancel/delete)
+Reports Placeholder
+Monthly chart placeholder
+Ready for Chart.js integration
+Export Functionality
+Generate CSV export
+Download file
+
+admin/assets/css/admin.css
+Calendar Styles
+Monthly calendar grid
+Day cells with hover effects
+Today highlighting
+Booking dots by status
+Navigation controls
+Day Details
+Booking item cards
+Action buttons
+Responsive layout
+Reports Page
+Statistics cards with hover effects
+Charts container
+Recent bookings table
+Bookings Table
+Clean table design
+Status badges
+Hover effects
+Forms & Inputs
+Consistent input styling
+Focus states
+Responsive sizing
+Modals & Notifications
+Modal overlay
+Success/error/info notifications
+Close buttons
+Export/Import
+Button styles
+Section styling
+Responsive Design
+Mobile-first breakpoints
+Tablet and phone layouts
+Touch-friendly buttons
+Loading States
+Spinner animation
+Disabled states
+Accessibility
+Focus visible states
+Screen reader only class
+Keyboard navigation
+Print Styles
+Print-friendly layout
+Hidden navigation elements
+Animations
+Fade in
+Slide down
+Hover effects
+
+languages/wc-booking-calendar-nz.pot
+7963 line '.pot' file
+
+admin/templates/settings-general.php - Main settings page with tabs
+admin/templates/settings-time-slots.php - Visual and JSON time slots editor
+admin/templates/settings-booking-modes.php - Visual and JSON booking modes editor
+admin/templates/settings-person-types.php - Visual and JSON person types editor
+admin/templates/settings-notifications.php - Email notification settings
+admin/templates/settings-advanced.php - Peak days, multipliers, lead time, seasonal pricing
+
+====
+
+## UPDATES:
+
+includes/class-cart.php - added
+
+includes/class-order.php - added
+
+wc-booking-calendar-nz.php - fixed
+
+includes/class-frontend-handler.php - fixed
+
+public/templates/single-product/booking-form.php - fixed
+
