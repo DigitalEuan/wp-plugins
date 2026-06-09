@@ -8,6 +8,8 @@ Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
+* **In development**
+
 Advanced bookable products for WooCommerce — configurable time slots, resources, person types, conditional booking modes, and availability management. Built in New Zealand for NZ tour operators, activity providers and venue rentals.
 
 == Description ==
