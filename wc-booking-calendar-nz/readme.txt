@@ -4,11 +4,9 @@ Tags: woocommerce, booking, calendar, tours, resources, availability
 Requires at least: 6.0
 Tested up to: 6.6
 Requires PHP: 8.0
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-
-* **In development**
 
 Advanced bookable products for WooCommerce — configurable time slots, resources, person types, conditional booking modes, and availability management. Built in New Zealand for NZ tour operators, activity providers and venue rentals.
 
@@ -80,6 +78,25 @@ availability and pricing logic. Run:
     composer test
 
 == Changelog ==
+
+= 1.1.1 =
+* Critical: added missing `<?php` opening tag to 6 PHP files (main plugin file, both CPT classes, frontend handler, admin class and admin-settings) — previously these would output their PHP source as plain HTML.
+* Critical: implemented the missing `WC_Booking_Calendar_Admin_Settings` class (settings page, six tabs, all sanitisers and the settings submenu).
+* Critical: completed the availability manager — all previously-referenced helpers (`validate_date`, `validate_time`, `get_slot_by_time`, `is_day_available`, `get_default_mode`, `get_mode_config`, `check_resource_full_day`, `get_booked_count`, `get_product_rules`, `check_product_rules`, `get_general_rules`, `check_general_rules`, `update_availability`, `release_availability`, `get_available_slots`, `check_availability_with_person_types`) are now real methods. Removed invalid `throw new WP_Error(…)` calls.
+* Fixed: the `Person Types` settings template was a duplicate of Notifications; replaced with a real visual + JSON editor.
+* Fixed: argument order mismatch on `check_availability()` callers (resource id vs. mode).
+* Fixed: JS↔PHP global name mismatch — frontend.js uses `wc_booking_calendar.ajax_url` / nonce / i18n, admin.js uses `wc_booking_calendar_admin.*` — PHP `wp_localize_script()` now uses the matching object names.
+* Fixed: duplicate cart hooks across `class-cart.php`, `class-frontend-handler.php`, `class-order.php` and `hooks.php` were overwriting cart-item data and creating duplicate bookings. The canonical hooks now live in `hooks.php`; the other classes are kept as legacy bridges with no hook registrations.
+* Fixed: `class-order.php` was writing to columns (`item_id`, `time_slot`) that don't exist in the schema (`order_item_id`, `booking_time`). Persistence is now handled by the bookings CPT + `update_availability()`.
+* Fixed: nonce field on the single-product booking form is now `wc_booking_nonce` to match the verifier in `hooks.php`.
+* Fixed: `booking-form.php` no longer calls a non-existent `WC_Booking_Calendar_Frontend_Handler::get_available_resources()` method. The resource select now uses `name="booking_resource_id"` to match the cart hook.
+* Fixed: admin AJAX action names now match what `admin.js` actually sends (`wc_booking_admin_get_bookings`, `…_update_booking`, `…_delete_booking`, `…_export_bookings`); legacy `wc_booking_calendar_*` action names are kept registered too.
+* Fixed: admin calendar page now outputs the DOM nodes (`#calendar-days`, `#current-month`, `#prev-month`, `#next-month`, `#today`, `#day-details`, `#bookings-list`, `#export-bookings`) that `admin.js` was expecting.
+* Fixed: `get_bookings_ajax` referenced a non-existent `customer_name` column — query is now schema-safe and nonce-checked.
+* Fixed: cart pricing now uses `booking_mode` (not the never-set `mode` key) and respects the peak-day multiplier in addition to the morning-tea surcharge.
+* Fixed: order line-item meta `_booking_person_count` is now stored at checkout (was referenced but never written).
+* Fixed: `release_availability()` now accepts both signatures used in the codebase (`($booking_post_id)` and `($product_id, $date, $time, $person_count)`).
+* Misc: `current_time('timestamp')` replaced with `current_datetime()->getTimestamp()`. `WP_Error` no longer `throw`n. Settings page registers all option keys used by the templates.
 
 = 1.1.0 =
 * Rewrite for stability — every class file now passes PHP 8 lint and has unit tests.

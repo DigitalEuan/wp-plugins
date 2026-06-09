@@ -170,8 +170,9 @@ function wc_booking_calendar_add_order_item_meta( $item, $cart_item_key, $values
 		$item->add_meta_data( '_booking_morning_tea', $data['morning_tea'] );
 		
 		// Save Person Types as JSON for easy retrieval
-		$item->add_meta_data( '_booking_person_types', json_encode( $data['person_types'] ) );
-		
+		$item->add_meta_data( '_booking_person_types', wp_json_encode( $data['person_types'] ) );
+		$item->add_meta_data( '_booking_person_count', array_sum( (array) $data['person_types'] ) );
+
 		// Store the full price as meta so you know the total value for the booking records
 		$item->add_meta_data( '_booking_total_price', $item->get_subtotal() );
 	}
@@ -186,24 +187,38 @@ function wc_booking_calendar_apply_booking_price( $cart ) {
     if ( is_admin() && ! defined( 'DOING_AJAX' ) ) return;
 
     foreach ( $cart->get_cart() as $cart_item ) {
-        if ( isset( $cart_item['booking_data'] ) ) {
-            $data = $cart_item['booking_data'];
-            
-            // 1. Calculate Base Price from Person Types
-            // Ensure your WC_Booking_Calendar_Product::calculate_price() 
-            // is returning the sum of all person types.
-            $price = WC_Booking_Calendar_Product::calculate_price( 
-                $cart_item['product_id'], 
-                $data['person_types'] 
-            );
-            
-            // 2. Add Morning Tea Surcharge if Guided
-            if ( !empty( $data['morning_tea'] ) && 'guided' === $data['mode'] ) {
-                $total_people = array_sum( $data['person_types'] );
-                $price += ( 10 * $total_people ); // $10 per person
+        if ( ! isset( $cart_item['booking_data'] ) ) {
+            continue;
+        }
+        $data = $cart_item['booking_data'];
+
+        // 1. Calculate Base Price from Person Types.
+        $price = WC_Booking_Calendar_Product::calculate_price(
+            $cart_item['product_id'],
+            isset( $data['person_types'] ) ? (array) $data['person_types'] : array()
+        );
+
+        // 2. Add Morning Tea Surcharge if Guided.
+        $is_guided    = 'guided' === ( $data['booking_mode'] ?? '' );
+        $morning_tea  = 'yes' === ( $data['morning_tea'] ?? 'no' );
+        if ( $morning_tea && $is_guided ) {
+            $total_people = array_sum( (array) ( $data['person_types'] ?? array() ) );
+            $surcharge    = (float) get_option( 'wc_booking_calendar_morning_tea_price', 10 );
+            $price       += $surcharge * $total_people;
+        }
+
+        // 3. Peak day multiplier.
+        if ( ! empty( $data['booking_date'] ) ) {
+            $availability = WC_Booking_Calendar_Availability_Manager::get_instance();
+            $rules        = $availability->get_general_rules();
+            $day          = gmdate( 'l', strtotime( $data['booking_date'] ) );
+            if ( in_array( $day, (array) $rules['peak_days'], true ) ) {
+                $price = round( $price * (float) $rules['peak_multiplier'], 2 );
             }
-            
-            // 3. Set Final Price
+        }
+
+        // 4. Set Final Price.
+        if ( $price > 0 && isset( $cart_item['data'] ) && is_object( $cart_item['data'] ) ) {
             $cart_item['data']->set_price( $price );
         }
     }
@@ -239,27 +254,37 @@ function wc_booking_calendar_add_deposit_fee( $cart ) {
  * Final validation during checkout to ensure availability hasn't changed.
  */
 function wc_booking_calendar_validate_cart_items() {
+	if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
+		return;
+	}
 	$availability = WC_Booking_Calendar_Availability_Manager::get_instance();
 
 	foreach ( WC()->cart->get_cart() as $cart_item ) {
-		if ( isset( $cart_item['booking_data'] ) ) {
-			$data = $cart_item['booking_data'];
-			
-			$result = $availability->check_availability(
-				$cart_item['product_id'],
-				$data['booking_date'],
-				$data['booking_time'],
-				$data['booking_mode'],
-				array_sum( $data['person_types'] )
-			);
+		if ( ! isset( $cart_item['booking_data'] ) ) {
+			continue;
+		}
+		$data = $cart_item['booking_data'];
 
-			if ( is_wp_error( $result ) ) {
-				wc_add_notice( sprintf( 
-					__( 'Sorry, the booking for %s on %s is no longer available.', 'wc-booking-calendar-nz' ), 
-					$cart_item['data']->get_name(), 
-					$data['booking_date'] 
-				), 'error' );
-			}
+		$result = $availability->check_availability(
+			(int) $cart_item['product_id'],
+			(string) ( $data['booking_date'] ?? '' ),
+			(string) ( $data['booking_time'] ?? '' ),
+			(int) ( $data['resource_id'] ?? 0 ),
+			(string) ( $data['booking_mode'] ?? '' ),
+			array_sum( (array) ( $data['person_types'] ?? array() ) )
+		);
+
+		if ( is_wp_error( $result ) ) {
+			wc_add_notice(
+				sprintf(
+					/* translators: 1: product name, 2: booking date, 3: detail */
+					__( 'Sorry, the booking for %1$s on %2$s is no longer available: %3$s', 'wc-booking-calendar-nz' ),
+					$cart_item['data']->get_name(),
+					$data['booking_date'] ?? '',
+					$result->get_error_message()
+				),
+				'error'
+			);
 		}
 	}
 }
@@ -319,18 +344,27 @@ function wc_booking_calendar_process_checkout_order( $order_id, $posted, $order 
 		if ( ! $product || ! WC_Booking_Calendar_Product::is_booking_product( $product ) ) {
 			continue;
 		}
+		// Skip if a booking has already been created for this item.
+		if ( $item->get_meta( '_booking_id' ) ) {
+			continue;
+		}
 		$booking_id = WC_Booking_Calendar_Booking_CPT::create_booking_from_order( $item, $order );
 		if ( $booking_id ) {
 			$availability = WC_Booking_Calendar_Availability_Manager::get_instance();
 			$availability->update_availability(
 				$booking_id,
 				array(
-					'product_id'   => $product->get_id(),
-					'booking_date' => (string) $item->get_meta( '_booking_date' ),
-					'booking_time' => (string) $item->get_meta( '_booking_time' ),
-					'booking_mode' => (string) $item->get_meta( '_booking_mode' ),
-					'resource_id'  => (int) $item->get_meta( '_booking_resource_id' ),
-					'person_count' => (int) get_post_meta( $booking_id, '_booking_person_count', true ),
+					'order_id'      => $order->get_id(),
+					'order_item_id' => $item->get_id(),
+					'product_id'    => $product->get_id(),
+					'booking_date'  => (string) $item->get_meta( '_booking_date' ),
+					'booking_time'  => (string) $item->get_meta( '_booking_time' ),
+					'booking_mode'  => (string) $item->get_meta( '_booking_mode' ),
+					'resource_id'   => (int) $item->get_meta( '_booking_resource_id' ),
+					'person_count'  => (int) get_post_meta( $booking_id, '_booking_person_count', true ),
+					'person_types'  => WC_Booking_Calendar_Booking_CPT::decode_person_types( $item->get_meta( '_booking_person_types' ) ),
+					'total_price'   => (float) $item->get_total(),
+					'status'        => 'pending',
 				)
 			);
 		}
@@ -408,25 +442,35 @@ add_filter( 'woocommerce_order_item_get_formatted_meta_data', 'wc_booking_calend
  * @return void
  */
 function wc_booking_calendar_get_bookings_ajax() {
-	check_ajax_referer( 'wc_booking_calendar_nonce', 'nonce' );
+	$nonce = isset( $_REQUEST['nonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['nonce'] ) ) : '';
+	if ( ! wp_verify_nonce( $nonce, 'wc_booking_calendar' ) && ! wp_verify_nonce( $nonce, 'wc_booking_calendar_admin' ) ) {
+		wp_send_json_error( array( 'message' => __( 'Security check failed.', 'wc-booking-calendar-nz' ) ), 403 );
+	}
 
-	$start = sanitize_text_field( $_GET['start'] );
-	$end   = sanitize_text_field( $_GET['end'] );
+	$start = isset( $_REQUEST['start'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['start'] ) ) : gmdate( 'Y-m-01' );
+	$end   = isset( $_REQUEST['end'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['end'] ) ) : gmdate( 'Y-m-t' );
 
 	global $wpdb;
-	$bookings = $wpdb->get_results( $wpdb->prepare(
-		"SELECT * FROM {$wpdb->prefix}wc_booking_calendar_bookings 
-		 WHERE booking_date BETWEEN %s AND %s",
-		$start, $end
-	) );
+	$table    = $wpdb->prefix . 'wc_booking_calendar_bookings';
+	$bookings = (array) $wpdb->get_results(
+		$wpdb->prepare(
+			"SELECT id, product_id, booking_date, booking_time, booking_mode, resource_id, person_count, status
+			   FROM {$table}
+			  WHERE booking_date BETWEEN %s AND %s",
+			$start,
+			$end
+		)
+	);
 
 	$events = array();
 	foreach ( $bookings as $b ) {
+		$title    = ( 'guided' === $b->booking_mode ? __( 'Guided', 'wc-booking-calendar-nz' ) : __( 'Self', 'wc-booking-calendar-nz' ) )
+					. ' — ' . get_the_title( (int) $b->product_id );
 		$events[] = array(
-			'id'    => $b->id,
-			'title' => $b->booking_mode . ' - ' . $b->customer_name,
-			'start' => $b->booking_date . 'T' . $b->booking_time,
-			'color' => ( $b->booking_mode === 'guided' ? '#f00' : '#00f' )
+			'id'    => (int) $b->id,
+			'title' => $title,
+			'start' => $b->booking_date . ( $b->booking_time ? 'T' . substr( $b->booking_time, 0, 5 ) : '' ),
+			'color' => ( 'guided' === $b->booking_mode ? '#f0563a' : '#3a89f0' ),
 		);
 	}
 
@@ -469,19 +513,30 @@ function wc_booking_calendar_add_email_instructions( $fields, $sent_to_admin, $o
  */
 function wc_booking_calendar_release_availability_on_cancel( $order_id ) {
     $order = wc_get_order( $order_id );
+    if ( ! $order ) {
+        return;
+    }
     $availability_manager = WC_Booking_Calendar_Availability_Manager::get_instance();
 
     foreach ( $order->get_items() as $item ) {
-        // Only process if this item is one of our bookings
-        if ( $date = $item->get_meta( '_booking_date' ) ) {
-            $product_id   = $item->get_product_id();
-            $time         = $item->get_meta( '_booking_time' );
-            $person_types = json_decode( $item->get_meta( '_booking_person_types' ), true );
-            $total_people = array_sum( $person_types );
+        $date = $item->get_meta( '_booking_date' );
+        if ( ! $date ) {
+            continue;
+        }
 
-            // Logic to decrement the booked_count in your availability table
-            // This should be a method in your AvailabilityManager
-            $availability_manager->release_availability( $product_id, $date, $time, $total_people );
+        // Preferred path: release by booking-post ID (the one created in process_checkout_order).
+        $booking_post_id = (int) $item->get_meta( '_booking_id' );
+        if ( $booking_post_id ) {
+            $availability_manager->release_availability( $booking_post_id );
+            // Also flip the CPT status.
+            $post = get_post( $booking_post_id );
+            if ( $post && in_array( $post->post_status, array( 'pending', 'confirmed' ), true ) ) {
+                wp_update_post( array( 'ID' => $booking_post_id, 'post_status' => 'cancelled' ) );
+            }
+        } else {
+            // Legacy fallback: release by slot.
+            $time = (string) $item->get_meta( '_booking_time' );
+            $availability_manager->release_availability( (int) $item->get_product_id(), (string) $date, $time, 0 );
         }
     }
 }

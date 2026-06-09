@@ -128,8 +128,20 @@
                 }
             });
             
-            // Add to cart button
-            $(document).on('click', '.wc-booking-form #booking-add-to-cart', function() {
+            // Add to cart button. If the booking form is rendered INSIDE the standard
+            // WooCommerce <form class="cart"> (single-product page), let the browser do
+            // the normal POST submit so WC's add-to-cart pipeline (with all our hooks)
+            // runs server-side. Otherwise, fall back to an AJAX submit.
+            $(document).on('click', '.wc-booking-form #booking-add-to-cart', function(e) {
+                var $cartForm = $(this).closest('form.cart');
+                if ($cartForm.length) {
+                    // Validate first; allow native submit only if valid.
+                    if (!WCBookingCalendar.validateForm()) {
+                        e.preventDefault();
+                    }
+                    return;
+                }
+                e.preventDefault();
                 WCBookingCalendar.handleAddToCart();
             });
         },
@@ -234,8 +246,10 @@
                 },
                 success: function(response) {
                     if (response.success) {
+                        // PHP returns either {total, total_formatted} or {price}.
+                        var amount = (response.data && (response.data.total !== undefined ? response.data.total : response.data.price)) || 0;
                         $('#booking-total-price').text(
-                            WCBookingCalendar.formatCurrency(response.data.price)
+                            WCBookingCalendar.formatCurrency(amount)
                         );
                         
                         // Update breakdown display
@@ -259,9 +273,10 @@
          * Format currency
          */
         formatCurrency: function(amount) {
-            return wc_currency_settings.currency_symbol + 
-                   parseFloat(amount).toFixed(2) + 
-                   ' ' + wc_currency_settings.currency_pos;
+            var symbol = (typeof wc_booking_calendar !== 'undefined' && wc_booking_calendar.currency_symbol)
+                ? wc_booking_calendar.currency_symbol
+                : '$';
+            return symbol + parseFloat(amount || 0).toFixed(2);
         },
         
         /**
@@ -446,10 +461,7 @@
             alert(message);
         },
         
-        formatCurrency: function(amount) {
-            return wc_currency_settings.currency_symbol + 
-                   parseFloat(amount).toFixed(2);
-        }
+        // (duplicated formatCurrency intentionally removed; the version above wins)
     };
     
     /**

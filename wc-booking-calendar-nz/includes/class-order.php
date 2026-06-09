@@ -1,66 +1,69 @@
 <?php
 /**
- * Handles the conversion of Cart items into booked entities.
+ * WC Booking Calendar - Order class (legacy bridge).
+ *
+ * NOTE: All order-line-item persistence and booking creation hooks
+ * live in includes/hooks.php (which uses the bookings CPT +
+ * WC_Booking_Calendar_Availability_Manager::update_availability() to
+ * write to the custom tables).
+ *
+ * This class is kept for backward compatibility and to expose a small
+ * static helper. It deliberately does NOT register WooCommerce hooks of
+ * its own — doing so would create duplicate bookings and try to insert
+ * rows with mismatched column names.
+ *
+ * @package WC_Booking_Calendar_NZ
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
-    exit;
+	exit;
 }
 
+/**
+ * Class WC_Booking_Calendar_Order
+ */
 class WC_Booking_Calendar_Order {
 
-    public function __construct() {
-        // Triggered when an order is created/processed
-        add_action( 'woocommerce_checkout_create_order_line_item', [ $this, 'add_booking_meta_to_order_item' ], 10, 4 );
-        add_action( 'woocommerce_order_status_completed', [ $this, 'process_order_bookings' ] );
-    }
+	/**
+	 * Singleton.
+	 *
+	 * @var WC_Booking_Calendar_Order|null
+	 */
+	private static $instance = null;
 
-    /**
-     * Store booking data into the order line item.
-     */
-    public function add_booking_meta_to_order_item( $item, $cart_item_key, $values, $order ) {
-        if ( isset( $values['booking_data'] ) ) {
-            $item->add_meta_data( '_booking_details', $values['booking_data'] );
-        }
-    }
+	/**
+	 * Get singleton.
+	 *
+	 * @return WC_Booking_Calendar_Order
+	 */
+	public static function get_instance() {
+		if ( null === self::$instance ) {
+			self::$instance = new self();
+		}
+		return self::$instance;
+	}
 
-    /**
-     * Triggered when order is completed. 
-     * This is where you insert into your custom booking database tables.
-     */
-    public function process_order_bookings( $order_id ) {
-        $order = wc_get_order( $order_id );
+	/**
+	 * Constructor.
+	 */
+	private function __construct() {
+		// Intentionally empty — see file header.
+	}
 
-        foreach ( $order->get_items() as $item_id => $item ) {
-            $booking_data = $item->get_meta( '_booking_details' );
-
-            if ( $booking_data ) {
-                $this->create_booking_record( $booking_data, $order_id, $item_id );
-            }
-        }
-    }
-
-    /**
-     * Logic to insert into your custom table (e.g., wp_wc_booking_calendar_bookings)
-     */
-    private function create_booking_record( $data, $order_id, $item_id ) {
-        global $wpdb;
-
-        $table_name = $wpdb->prefix . 'wc_booking_calendar_bookings';
-
-        $wpdb->insert(
-            $table_name,
-            [
-                'order_id'    => $order_id,
-                'item_id'     => $item_id,
-                'booking_date' => isset($data['booking_date']) ? sanitize_text_field( $data['booking_date'] ) : '',
-                'time_slot'    => isset($data['booking_time']) ? sanitize_text_field( $data['booking_time'] ) : '',
-                'status'      => 'confirmed',
-                'created_at'  => current_time( 'mysql' ),
-            ],
-            [ '%d', '%d', '%s', '%s', '%s', '%s' ]
-        );
-    }
+	/**
+	 * Get all booking rows for an order from the custom bookings table.
+	 *
+	 * @param int $order_id Order ID.
+	 * @return array<int,object>
+	 */
+	public static function get_bookings_for_order( $order_id ) {
+		global $wpdb;
+		$table = $wpdb->prefix . 'wc_booking_calendar_bookings';
+		return (array) $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE order_id = %d ORDER BY booking_date ASC, booking_time ASC",
+				(int) $order_id
+			)
+		);
+	}
 }
-
-new WC_Booking_Calendar_Order();

@@ -1,3 +1,4 @@
+<?php
 /**
  * WC Booking Calendar - Resource CPT.
  *

@@ -23,7 +23,7 @@ $max_date = $max_advance > 0 ? date('Y-m-d', strtotime("+{$max_advance} days")) 
 <div class="wc-booking-form" id="wc-booking-form-<?php echo esc_attr($product->get_id()); ?>" data-mode="<?php echo esc_attr($product->get_meta('_booking_mode')); ?>">
     
     <?php // Nonce field for security ?>
-    <input type="hidden" name="booking_nonce" value="<?php echo wp_create_nonce('wc_booking_calendar_add_to_cart'); ?>">
+    <input type="hidden" name="wc_booking_nonce" value="<?php echo esc_attr( wp_create_nonce( 'wc_booking_calendar_add_to_cart' ) ); ?>">
     
     <?php // Hidden product ID field ?>
     <input type="hidden" id="product_id" name="product_id" value="<?php echo esc_attr($product->get_id()); ?>">
@@ -94,23 +94,25 @@ $max_date = $max_advance > 0 ? date('Y-m-d', strtotime("+{$max_advance} days")) 
         </div>
     </div>
     
-    <?php // Resource Selection (if required) ?>
-    <?php 
-    $requires_resource = $product->get_meta('_booking_requires_resource') === 'yes';
-    $resources = WC_Booking_Calendar_Frontend_Handler::get_instance()->get_available_resources($product);
+    <?php
+    // Resource Selection (if required).
+    // $resources, $requires_resource, $person_types and $booking_modes are
+    // provided by WC_Booking_Calendar_Frontend_Handler::get_booking_form_html().
+    $resources = isset( $resources ) ? (array) $resources : ( class_exists( 'WC_Booking_Calendar_Resource_CPT' ) ? WC_Booking_Calendar_Resource_CPT::get_available_resources() : array() );
+    $requires_resource = isset( $requires_resource ) ? (bool) $requires_resource : ( 'yes' === $product->get_meta( '_booking_requires_resource' ) );
     ?>
-    
-    <?php if (!empty($resources) && ($requires_resource || $product->get_meta('_booking_mode') === 'guided' || $product->get_meta('_booking_mode') === 'both')): ?>
+
+    <?php if ( ! empty( $resources ) && $requires_resource ) : ?>
     <div class="form-section">
-        <div class="form-section-title"><?php _e('Select Guide/Resource', 'wc-booking-calendar-nz'); ?></div>
-        
+        <div class="form-section-title"><?php esc_html_e( 'Select Guide / Resource', 'wc-booking-calendar-nz' ); ?></div>
+
         <div class="booking-resource">
-            <label for="resource_id"><?php _e('Guide/Resource', 'wc-booking-calendar-nz'); ?></label>
-            <select id="resource_id" name="resource_id" required>
-                <option value=""><?php _e('Choose a guide...', 'wc-booking-calendar-nz'); ?></option>
-                <?php foreach ($resources as $resource): ?>
-                    <option value="<?php echo esc_attr($resource->ID); ?>">
-                        <?php echo esc_html($resource->post_title); ?>
+            <label for="resource_id"><?php esc_html_e( 'Guide / Resource', 'wc-booking-calendar-nz' ); ?></label>
+            <select id="resource_id" name="booking_resource_id" required>
+                <option value=""><?php esc_html_e( 'Choose a guide…', 'wc-booking-calendar-nz' ); ?></option>
+                <?php foreach ( $resources as $resource ) : ?>
+                    <option value="<?php echo esc_attr( $resource->ID ); ?>">
+                        <?php echo esc_html( $resource->post_title ); ?>
                     </option>
                 <?php endforeach; ?>
             </select>
@@ -120,12 +122,12 @@ $max_date = $max_advance > 0 ? date('Y-m-d', strtotime("+{$max_advance} days")) 
     
     <?php // Person Types Section ?>
     <div class="form-section">
-        <div class="form-section-title"><?php _e('Number of People', 'wc-booking-calendar-nz'); ?></div>
-        
+        <div class="form-section-title"><?php esc_html_e( 'Number of People', 'wc-booking-calendar-nz' ); ?></div>
+
         <div class="booking-person-types">
-            <?php 
-            $person_types = get_option('wc_booking_calendar_person_types', array());
-            foreach ($person_types as $type): 
+            <?php
+            $person_types = isset( $person_types ) ? (array) $person_types : (array) get_option( 'wc_booking_calendar_person_types', array() );
+            foreach ( $person_types as $type ) :
             ?>
                 <div class="person-type-input">
                     <label for="person_type_<?php echo esc_attr($type['id']); ?>">
@@ -149,45 +151,19 @@ $max_date = $max_advance > 0 ? date('Y-m-d', strtotime("+{$max_advance} days")) 
         </div>
     </div>
     
-    <?php // Limited Mobility Section (checkbox) ?>
-    <?php if ($product->get_meta('_limited_mobility') === 'yes'): ?>
+    <?php // Accessibility & Special Requests (combined field, stored as _booking_limited_mobility + _booking_special_requests) ?>
     <div class="form-section">
-        <div class="form-section-title"><?php _e('Accessibility', 'wc-booking-calendar-nz'); ?></div>
-        
-        <div class="limited-mobility">
-            <label for="limited_mobility">
-                <input type="checkbox" 
-                       id="limited_mobility" 
-                       name="limited_mobility" 
-                       value="yes" />
-                <?php _e('I have limited mobility', 'wc-booking-calendar-nz'); ?>
-            </label>
-            <div class="limited-mobility-message" style="display:none;">
-                <?php _e('Please let us know your requirements so we can accommodate you.', 'wc-booking-calendar-nz'); ?>
-            </div>
-        </div>
-    </div>
-    <?php endif; ?>
-    
-    <?php // Special Requests Section (optional) ?>
-    <div class="form-section">
-        <div class="form-section-title"><?php _e('Additional Information', 'wc-booking-calendar-nz'); ?></div>
-        
-        <div class="special-requests">
-            <label for="special_requests"><?php _e('Special Requests (optional)', 'wc-booking-calendar-nz'); ?></label>
-            <textarea id="special_requests" name="special_requests" rows="3" placeholder="<?php _e('Any special requirements or questions...', 'wc-booking-calendar-nz'); ?>"></textarea>
-        </div>
-    </div>
-    
-    <?php // Limited Mobility / Special Requests Combined Field (NEW) ?>
-    <div class="form-section">
-        <div class="form-section-title"><?php _e('Accessibility & Special Requests', 'wc-booking-calendar-nz'); ?></div>
-        
+        <div class="form-section-title"><?php esc_html_e( 'Accessibility & Special Requests', 'wc-booking-calendar-nz' ); ?></div>
+
         <div class="booking-field-wrapper">
             <label for="booking_limited_mobility">
-                <?php esc_html_e('Limited Mobility or Special Requests:', 'wc-booking-calendar-nz'); ?>
+                <?php esc_html_e( 'Limited Mobility or Special Requests:', 'wc-booking-calendar-nz' ); ?>
             </label>
-            <textarea name="booking_limited_mobility" id="booking_limited_mobility" rows="3" class="input-text" placeholder="<?php esc_attr_e('Please let us know if anyone in your group has limited mobility or special interests.', 'wc-booking-calendar-nz'); ?>"></textarea>
+            <textarea name="booking_special_requests" id="booking_limited_mobility" rows="3" class="input-text" placeholder="<?php esc_attr_e( 'Please let us know if anyone in your group has limited mobility or special interests.', 'wc-booking-calendar-nz' ); ?>"></textarea>
+            <label class="limited-mobility-checkbox">
+                <input type="checkbox" name="booking_limited_mobility" value="yes" />
+                <?php esc_html_e( 'Someone in our group has limited mobility', 'wc-booking-calendar-nz' ); ?>
+            </label>
         </div>
     </div>
     
@@ -200,10 +176,12 @@ $max_date = $max_advance > 0 ? date('Y-m-d', strtotime("+{$max_advance} days")) 
     </div>
     
     <?php // Add to Cart Button ?>
-    <button type="submit" 
-            class="button booking-add-to-cart" 
-            id="booking-add-to-cart">
-        <?php _e('Book Now', 'wc-booking-calendar-nz'); ?>
+    <button type="submit"
+            class="button booking-add-to-cart"
+            id="booking-add-to-cart"
+            name="add-to-cart"
+            value="<?php echo esc_attr( $product->get_id() ); ?>">
+        <?php esc_html_e( 'Book Now', 'wc-booking-calendar-nz' ); ?>
     </button>
     
     <?php // Availability Status (hidden by default, shown by JS) ?>

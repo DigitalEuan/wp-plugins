@@ -1,8 +1,9 @@
+<?php
 /**
  * Plugin Name:       WC Booking Calendar NZ
  * Plugin URI:        https://digitaleuan.com
  * Description:       Advanced bookable products for WooCommerce with configurable time slots, resources, person types, conditional logic, and availability management. Built for New Zealand businesses.
- * Version:           1.1.0
+ * Version:           1.1.1
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            E Craig
@@ -22,12 +23,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin constants.
-define( 'WC_BOOKING_CALENDAR_VERSION', '1.1.0' );
+define( 'WC_BOOKING_CALENDAR_VERSION', '1.1.1' );
 define( 'WC_BOOKING_CALENDAR_PLUGIN_FILE', __FILE__ );
 define( 'WC_BOOKING_CALENDAR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WC_BOOKING_CALENDAR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'WC_BOOKING_CALENDAR_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
-define( 'WC_BOOKING_CALENDAR_DB_VERSION', '1.1.0' );
+define( 'WC_BOOKING_CALENDAR_DB_VERSION', '1.1.1' );
 
 /**
  * Main plugin bootstrap class.
@@ -333,7 +334,11 @@ final class WC_Booking_Calendar_NZ {
 			'wc_booking_calendar_min_group_size'    => 1,
 			'wc_booking_calendar_max_group_size'    => 50,
 			'wc_booking_calendar_lead_time_hours'   => 24,
+			'wc_booking_calendar_lead_time'         => 1,
+			'wc_booking_calendar_advance_window'    => 365,
 			'wc_booking_calendar_advance_days'      => 365,
+			'wc_booking_calendar_blackout_dates'    => array(),
+			'wc_booking_calendar_morning_tea_price' => 10,
 			'wc_booking_calendar_timezone'          => 'Pacific/Auckland',
 			'wc_booking_calendar_notifications'     => array(
 				'confirmation' => 1,

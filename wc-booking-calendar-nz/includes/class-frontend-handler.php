@@ -1,3 +1,4 @@
+<?php
 /**
  * WC Booking Calendar - Frontend Handler.
  *
@@ -41,10 +42,10 @@ class WC_Booking_Calendar_Frontend_Handler {
 		// Assets.
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 
-		// Cart validation.
-		add_filter( 'woocommerce_add_to_cart_validation', array( $this, 'validate_add_to_cart' ), 10, 3 );
-		add_filter( 'woocommerce_add_cart_item_data', array( $this, 'add_cart_item_data' ), 10, 3 );
-		add_filter( 'woocommerce_get_item_data', array( $this, 'get_item_data' ), 10, 2 );
+		// NOTE: Cart validation and cart-item-data filters are registered in
+		// includes/hooks.php (wc_booking_calendar_register_hooks). Registering
+		// them again here would either double-fire the validation or overwrite
+		// the richer cart item data with the simpler one.
 
 		// Shortcodes.
 		add_shortcode( 'wc_booking_form', array( $this, 'shortcode_booking_form' ) );
@@ -103,15 +104,16 @@ class WC_Booking_Calendar_Frontend_Handler {
 			true
 		);
 
+		// IMPORTANT: object name and keys must match what public/assets/frontend.js reads.
 		wp_localize_script(
 			'wc-booking-calendar-frontend',
-			'wcBookingCalendar',
+			'wc_booking_calendar',
 			array(
-				'ajaxurl'        => admin_url( 'admin-ajax.php' ),
-				'nonce'          => wp_create_nonce( 'wc_booking_calendar' ),
-				'currencySymbol' => function_exists( 'get_woocommerce_currency_symbol' ) ? get_woocommerce_currency_symbol() : '$',
-				'dateFormat'     => 'yy-mm-dd',
-				'i18n'           => array(
+				'ajax_url'        => admin_url( 'admin-ajax.php' ),
+				'nonce'           => wp_create_nonce( 'wc_booking_calendar' ),
+				'currency_symbol' => function_exists( 'get_woocommerce_currency_symbol' ) ? get_woocommerce_currency_symbol() : '$',
+				'date_format'     => 'yy-mm-dd',
+				'i18n'            => array(
 					'select_date'      => __( 'Select a date', 'wc-booking-calendar-nz' ),
 					'select_time'      => __( 'Select a time slot', 'wc-booking-calendar-nz' ),
 					'no_slots'         => __( 'No time slots available for this date.', 'wc-booking-calendar-nz' ),
@@ -190,9 +192,10 @@ class WC_Booking_Calendar_Frontend_Handler {
 			return false;
 		}
 
-		// 4. Availability Engine Validation
+		// 4. Availability Engine Validation (NOTE: signature is (product, date, time, resource_id, mode, person_count)).
 		$availability = WC_Booking_Calendar_Availability_Manager::get_instance();
-		$result = $availability->check_availability( $product_id, $date, $time, $mode, $total_people );
+		$resource_id  = isset( $_POST['resource_id'] ) ? (int) $_POST['resource_id'] : 0;
+		$result       = $availability->check_availability( $product_id, $date, $time, $resource_id, $mode, $total_people );
 
 		if ( is_wp_error( $result ) ) {
 			wc_add_notice( $result->get_error_message(), 'error' );
