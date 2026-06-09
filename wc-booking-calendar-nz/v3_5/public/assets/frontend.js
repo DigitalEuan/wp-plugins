@@ -18,6 +18,42 @@
             this.initAddToCart();
             this.initPriceCalculation();
             this.initValidation();
+            this.initGuidedModeToggle();
+        },
+        
+        /**
+         * ========================================
+         * GUIDED MODE TOGGLE
+         * ========================================
+         */
+        initGuidedModeToggle: function() {
+            var $modeSelect = $('[name="booking_mode"]');
+            var $guidedOptions = $('#guided-options');
+            var $teaCheckbox = $('[name="booking_morning_tea"]');
+            
+            if (!$modeSelect.length || !$guidedOptions.length) {
+                return;
+            }
+            
+            var toggleGuidedOptions = function() {
+                if ($modeSelect.val() === 'guided') {
+                    $guidedOptions.show();
+                    if ($teaCheckbox.length && !$teaCheckbox.is(':checked')) {
+                        $teaCheckbox.prop('checked', true);
+                    }
+                } else {
+                    $guidedOptions.hide();
+                    if ($teaCheckbox.length) {
+                        $teaCheckbox.prop('checked', false);
+                    }
+                }
+            };
+            
+            // Run on change
+            $modeSelect.on('change', toggleGuidedOptions);
+            
+            // Run on load to set initial state
+            toggleGuidedOptions();
         },
         
         /**

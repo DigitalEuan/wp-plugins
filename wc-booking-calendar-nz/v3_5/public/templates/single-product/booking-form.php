@@ -1,3 +1,4 @@
+<?php
 /**
  * WC Booking Calendar - Booking Form Template
  * Frontend booking form for product pages
@@ -9,18 +10,53 @@ if (!defined('ABSPATH')) {
 
 // Get the product
 global $product;
+
+// Get advance booking settings
+$lead_time_days = (int) get_option('wc_booking_calendar_lead_time', 1);
+$max_advance = (int) get_option('wc_booking_calendar_advance_window', 365);
+
+// Calculate min/max dates
+$min_date = $lead_time_days > 0 ? date('Y-m-d', strtotime("+{$lead_time_days} days")) : '';
+$max_date = $max_advance > 0 ? date('Y-m-d', strtotime("+{$max_advance} days")) : '';
 ?>
 
 <div class="wc-booking-form" id="wc-booking-form-<?php echo esc_attr($product->get_id()); ?>" data-mode="<?php echo esc_attr($product->get_meta('_booking_mode')); ?>">
     
     <?php // Nonce field for security ?>
-    <input type="hidden" name="booking_nonce" value="<?php echo wp_create_nonce('wc_booking_nonce'); ?>">
+    <input type="hidden" name="booking_nonce" value="<?php echo wp_create_nonce('wc_booking_calendar_add_to_cart'); ?>">
     
     <?php // Hidden product ID field ?>
     <input type="hidden" id="product_id" name="product_id" value="<?php echo esc_attr($product->get_id()); ?>">
     
-    <?php // Hidden mode field ?>
-    <input type="hidden" name="booking_mode" value="<?php echo esc_attr($product->get_meta('_booking_mode')); ?>">
+    <?php // Booking Mode Selection ?>
+    <div class="form-section">
+        <div class="form-section-title"><?php _e('Booking Mode', 'wc-booking-calendar-nz'); ?></div>
+        <div class="booking-mode-selection">
+            <label for="booking_mode"><?php _e('Select your preference:', 'wc-booking-calendar-nz'); ?></label>
+            <select name="booking_mode" id="booking_mode" required>
+                <option value="self"><?php esc_html_e('Self-Directed Walk', 'wc-booking-calendar-nz'); ?></option>
+                <option value="guided"><?php esc_html_e('Guided Tour', 'wc-booking-calendar-nz'); ?></option>
+            </select>
+        </div>
+    </div>
+    
+    <?php // Guided Options (shown when mode is guided) ?>
+    <div id="guided-options" style="display:none;">
+        <div class="form-section">
+            <div class="form-section-title"><?php _e('Guided Tour Options', 'wc-booking-calendar-nz'); ?></div>
+            
+            <!-- Morning Tea Checkbox -->
+            <div class="guided-option">
+                <label for="booking_morning_tea">
+                    <input type="checkbox" name="booking_morning_tea" value="yes" id="booking_morning_tea">
+                    <?php esc_html_e('Add Morning Tea (+$10 per person)', 'wc-booking-calendar-nz'); ?>
+                </label>
+            </div>
+            
+            <!-- Minimum People Notice -->
+            <p class="description"><?php esc_html_e('Guided tours require a minimum of 10 people.', 'wc-booking-calendar-nz'); ?></p>
+        </div>
+    </div>
     
     <?php // Booking Description (if set) ?>
     <?php $booking_description = $product->get_meta('_booking_description'); ?>
@@ -42,8 +78,8 @@ global $product;
                    name="booking_date" 
                    class="date-picker" 
                    placeholder="<?php _e('Select a date...', 'wc-booking-calendar-nz'); ?>"
-                   data-min-date="<?php echo $min_advance ? date('Y-m-d', strtotime("+" . $min_advance . " days")) : ''; ?>"
-                   data-max-date="<?php echo $max_advance ? date('Y-m-d', strtotime("+" . $max_advance . " days")) : ''; ?>"
+                   data-min-date="<?php echo esc_attr($min_date); ?>"
+                   data-max-date="<?php echo esc_attr($max_date); ?>"
                    required />
         </div>
         
@@ -113,7 +149,7 @@ global $product;
         </div>
     </div>
     
-    <?php // Limited Mobility Section ?>
+    <?php // Limited Mobility Section (checkbox) ?>
     <?php if ($product->get_meta('_limited_mobility') === 'yes'): ?>
     <div class="form-section">
         <div class="form-section-title"><?php _e('Accessibility', 'wc-booking-calendar-nz'); ?></div>
@@ -133,13 +169,25 @@ global $product;
     </div>
     <?php endif; ?>
     
-    <?php // Special Requests Section ?>
+    <?php // Special Requests Section (optional) ?>
     <div class="form-section">
         <div class="form-section-title"><?php _e('Additional Information', 'wc-booking-calendar-nz'); ?></div>
         
         <div class="special-requests">
             <label for="special_requests"><?php _e('Special Requests (optional)', 'wc-booking-calendar-nz'); ?></label>
             <textarea id="special_requests" name="special_requests" rows="3" placeholder="<?php _e('Any special requirements or questions...', 'wc-booking-calendar-nz'); ?>"></textarea>
+        </div>
+    </div>
+    
+    <?php // Limited Mobility / Special Requests Combined Field (NEW) ?>
+    <div class="form-section">
+        <div class="form-section-title"><?php _e('Accessibility & Special Requests', 'wc-booking-calendar-nz'); ?></div>
+        
+        <div class="booking-field-wrapper">
+            <label for="booking_limited_mobility">
+                <?php esc_html_e('Limited Mobility or Special Requests:', 'wc-booking-calendar-nz'); ?>
+            </label>
+            <textarea name="booking_limited_mobility" id="booking_limited_mobility" rows="3" class="input-text" placeholder="<?php esc_attr_e('Please let us know if anyone in your group has limited mobility or special interests.', 'wc-booking-calendar-nz'); ?>"></textarea>
         </div>
     </div>
     
@@ -152,10 +200,9 @@ global $product;
     </div>
     
     <?php // Add to Cart Button ?>
-    <button type="button" 
+    <button type="submit" 
             class="button booking-add-to-cart" 
-            id="booking-add-to-cart"
-            value="<?php _e('Book Now', 'wc-booking-calendar-nz'); ?>">
+            id="booking-add-to-cart">
         <?php _e('Book Now', 'wc-booking-calendar-nz'); ?>
     </button>
     
@@ -176,23 +223,3 @@ global $product;
     <div id="booking-success" class="success-message" style="display:none;"></div>
     
 </div>
-
-<?php
-// Add custom data to product page
-add_action('woocommerce_before_add_to_cart_button', 'wc_booking_calendar_display_form');
-
-function wc_booking_calendar_display_form() {
-    global $product;
-    
-    if (!$product || $product->get_type() !== 'bookable_tour') {
-        return;
-    }
-    
-    // Check if enabled
-    if ($product->get_meta('_booking_enabled') !== 'yes') {
-        return;
-    }
-    
-    // Include the template
-    wc_get_template('single-product/booking-form.php', array('product' => $product));
-}

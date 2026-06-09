@@ -41,6 +41,11 @@ class WC_Booking_Calendar_Frontend_Handler {
 		// Assets.
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 
+		// Cart validation.
+		add_filter( 'woocommerce_add_to_cart_validation', array( $this, 'validate_add_to_cart' ), 10, 3 );
+		add_filter( 'woocommerce_add_cart_item_data', array( $this, 'add_cart_item_data' ), 10, 3 );
+		add_filter( 'woocommerce_get_item_data', array( $this, 'get_item_data' ), 10, 2 );
+
 		// Shortcodes.
 		add_shortcode( 'wc_booking_form', array( $this, 'shortcode_booking_form' ) );
 		add_shortcode( 'wc_booking_calendar', array( $this, 'shortcode_booking_calendar' ) );
@@ -147,6 +152,121 @@ class WC_Booking_Calendar_Frontend_Handler {
 		}
 
 		return apply_filters( 'wc_booking_calendar_is_booking_context', false );
+	}
+
+	/* ------------------------------------------------------------------
+	 * Cart Validation
+	 * ------------------------------------------------------------------ */
+
+	/**
+	 * Validate booking product before adding to cart.
+	 *
+	 * @param bool $passed
+	 * @param int  $product_id
+	 * @param int  $quantity
+	 * @return bool
+	 */
+	public function validate_add_to_cart( $passed, $product_id, $quantity ) {
+		if ( ! WC_Booking_Calendar_Product::is_booking_product( $product_id ) ) {
+			return $passed;
+		}
+
+		// 1. Sanitize Inputs
+		$mode         = sanitize_text_field( wp_unslash( $_POST['booking_mode'] ?? 'self' ) );
+		$date         = sanitize_text_field( wp_unslash( $_POST['booking_date'] ?? '' ) );
+		$time         = sanitize_text_field( wp_unslash( $_POST['booking_time'] ?? '' ) );
+		$person_types = $this->sanitize_person_types( $_POST['person_types'] ?? array() );
+		$total_people = array_sum( $person_types );
+
+		// 2. Business Rule: Minimum Group Size for Guided Tours
+		if ( 'guided' === $mode && $total_people < 10 ) {
+			wc_add_notice( __( 'Guided tours require a minimum of 10 people.', 'wc-booking-calendar-nz' ), 'error' );
+			return false;
+		}
+
+		// 3. Business Rule: Required Fields
+		if ( empty( $date ) || empty( $time ) ) {
+			wc_add_notice( __( 'Please select both a date and a time for your booking.', 'wc-booking-calendar-nz' ), 'error' );
+			return false;
+		}
+
+		// 4. Availability Engine Validation
+		$availability = WC_Booking_Calendar_Availability_Manager::get_instance();
+		$result = $availability->check_availability( $product_id, $date, $time, $mode, $total_people );
+
+		if ( is_wp_error( $result ) ) {
+			wc_add_notice( $result->get_error_message(), 'error' );
+			return false;
+		}
+
+		return $passed;
+	}
+
+	/**
+	 * Add booking data to cart item.
+	 *
+	 * @param array $cart_item_data
+	 * @param int   $product_id
+	 * @param int   $variation_id
+	 * @return array
+	 */
+	public function add_cart_item_data( $cart_item_data, $product_id, $variation_id ) {
+		if ( ! WC_Booking_Calendar_Product::is_booking_product( $product_id ) ) {
+			return $cart_item_data;
+		}
+
+		$cart_item_data['booking_data'] = array(
+			'date'         => sanitize_text_field( wp_unslash( $_POST['booking_date'] ) ),
+			'time'         => sanitize_text_field( wp_unslash( $_POST['booking_time'] ) ),
+			'person_types' => $this->sanitize_person_types( $_POST['person_types'] ?? array() ),
+			'resource_id'  => isset( $_POST['resource_id'] ) ? (int) $_POST['resource_id'] : 0,
+			'mode'         => sanitize_text_field( wp_unslash( $_POST['booking_mode'] ) ),
+		);
+
+		return $cart_item_data;
+	}
+
+	/**
+	 * Display booking data in cart.
+	 *
+	 * @param array $item_data
+	 * @param array $cart_item
+	 * @return array
+	 */
+	public function get_item_data( $item_data, $cart_item ) {
+		if ( isset( $cart_item['booking_data'] ) ) {
+			$item_data[] = array(
+				'name'  => __( 'Date', 'wc-booking-calendar-nz' ),
+				'value' => $cart_item['booking_data']['date'],
+			);
+			$item_data[] = array(
+				'name'  => __( 'Time', 'wc-booking-calendar-nz' ),
+				'value' => $cart_item['booking_data']['time'],
+			);
+			if ( ! empty( $cart_item['booking_data']['person_types'] ) ) {
+				$person_types_list = array();
+				foreach ( $cart_item['booking_data']['person_types'] as $type_id => $count ) {
+					$person_types_list[] = $count . 'x ' . $type_id;
+				}
+				$item_data[] = array(
+					'name'  => __( 'Persons', 'wc-booking-calendar-nz' ),
+					'value' => implode(', ', $person_types_list),
+				);
+			}
+			if ( $cart_item['booking_data']['resource_id'] > 0 ) {
+				$item_data[] = array(
+					'name'  => __( 'Resource', 'wc-booking-calendar-nz' ),
+					'value' => $cart_item['booking_data']['resource_id'],
+				);
+			}
+			if ( ! empty( $cart_item['booking_data']['mode'] ) ) {
+				$item_data[] = array(
+					'name'  => __( 'Mode', 'wc-booking-calendar-nz' ),
+					'value' => $cart_item['booking_data']['mode'],
+				);
+			}
+		}
+		return $item_data;
 	}
 
 	/* ------------------------------------------------------------------

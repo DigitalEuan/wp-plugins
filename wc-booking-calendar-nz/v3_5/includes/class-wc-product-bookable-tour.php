@@ -1,3 +1,4 @@
+<?php
 /**
  * WC Booking Calendar - Bookable Tour Product Class.
  *
@@ -11,6 +12,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! class_exists( 'WC_Product_Simple' ) ) {
+	return;
+}
+
+// Ensure the main product class is loaded before referencing its constant
+if ( ! class_exists( 'WC_Booking_Calendar_Product' ) ) {
 	return;
 }
 

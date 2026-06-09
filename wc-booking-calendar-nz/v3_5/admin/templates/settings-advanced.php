@@ -106,4 +106,26 @@
             </tbody>
         </table>
     </div>
+
+    <!-- Global Blackout Dates Section -->
+    <div class="section">
+        <h3><?php _e('Global Blackout Dates', 'wc-booking-calendar-nz'); ?></h3>
+        <table class="form-table">
+            <tbody>
+                <tr valign="top">
+                    <th scope="row"><?php esc_html_e('Blackout Dates', 'wc-booking-calendar-nz'); ?></th>
+                    <td>
+                        <textarea 
+                            name="wc_booking_calendar_blackout_dates" 
+                            rows="5" 
+                            cols="30" 
+                            class="large-text"><?php 
+                                echo esc_textarea( implode( "\n", get_option( 'wc_booking_calendar_blackout_dates', array() ) ) ); 
+                            ?></textarea>
+                        <p class="description"><?php esc_html_e('Enter one date per line (YYYY-MM-DD). These dates will be blocked for all bookings.', 'wc-booking-calendar-nz'); ?></p>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
 </div>

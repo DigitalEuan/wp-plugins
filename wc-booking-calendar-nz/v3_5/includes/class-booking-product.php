@@ -1,3 +1,4 @@
+<?php
 /**
  * WC Booking Calendar - Booking Product.
  *
@@ -42,7 +43,8 @@ class WC_Booking_Calendar_Product {
 	private function __construct() {
 		add_filter( 'product_type_selector', array( $this, 'add_product_type' ) );
 		add_filter( 'woocommerce_product_class', array( $this, 'product_class' ), 10, 2 );
-		add_action( 'init', array( $this, 'register_product_class' ), 5 );
+		// Product class file loads on woocommerce_loaded so WC_Product_Simple exists.
+		add_action( 'woocommerce_loaded', array( $this, 'load_product_class' ), 5 );
 
 		// Admin tabs.
 		add_filter( 'woocommerce_product_data_tabs', array( $this, 'add_product_data_tabs' ) );
@@ -83,55 +85,17 @@ class WC_Booking_Calendar_Product {
 	}
 
 	/**
-	 * Register the product class if WC_Product_Simple is loaded.
+	 * Load the product class (a separate file so we don't nest class decls).
 	 *
 	 * @return void
 	 */
-	public function register_product_class() {
-		if ( ! class_exists( 'WC_Product_Simple' ) || class_exists( 'WC_Product_Bookable_Tour' ) ) {
+	public function load_product_class() {
+		if ( class_exists( 'WC_Product_Bookable_Tour' ) ) {
 			return;
 		}
-
-		/**
-		 * Bookable tour product class.
-		 */
-		class WC_Product_Bookable_Tour extends WC_Product_Simple {
-
-			/**
-			 * Get internal type.
-			 *
-			 * @return string
-			 */
-			public function get_type() {
-				return WC_Booking_Calendar_Product::PRODUCT_TYPE;
-			}
-
-			/**
-			 * No "purchasable" check fails — always purchasable.
-			 *
-			 * @return bool
-			 */
-			public function is_purchasable() {
-				return true;
-			}
-
-			/**
-			 * Always virtual (no shipping).
-			 *
-			 * @return bool
-			 */
-			public function is_virtual() {
-				return true;
-			}
-
-			/**
-			 * No stock management for bookings.
-			 *
-			 * @return bool
-			 */
-			public function managing_stock() {
-				return false;
-			}
+		$path = WC_BOOKING_CALENDAR_PLUGIN_DIR . 'includes/class-wc-product-bookable-tour.php';
+		if ( file_exists( $path ) ) {
+			require_once $path;
 		}
 	}
 
