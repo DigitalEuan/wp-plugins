@@ -160,22 +160,20 @@ class WC_Booking_Calendar_Availability_Manager {
 		$wpdb->query( 'START TRANSACTION' );
 
 		try {
-			// Guided Tour logic: an existing guided booking blocks the whole day for that product.
-			if ( 'guided' === $mode ) {
+			// Full-day booking modes block the whole day for that product.
+			if ( ! empty( $mode_config['full_day_block'] ) ) {
 				$exists = (int) $wpdb->get_var(
 					$wpdb->prepare(
 						"SELECT COUNT(*) FROM {$this->bookings_table}
 						 WHERE product_id = %d
 						   AND booking_date = %s
-						   AND booking_mode = %s
 						   AND status NOT IN ('cancelled','refunded','failed')",
 						$product_id,
-						$date,
-						'guided'
+						$date
 					)
 				);
 				if ( $exists > 0 ) {
-					throw new Exception( __( 'This day is already fully booked for a private tour.', 'wc-booking-calendar-nz' ) );
+					throw new Exception( __( 'This day is already fully booked.', 'wc-booking-calendar-nz' ) );
 				}
 			}
 
@@ -291,7 +289,7 @@ class WC_Booking_Calendar_Availability_Manager {
 	 * @param int    $resource_id Resource.
 	 * @return array[]
 	 */
-	public function get_available_slots( $product_id, $date, $resource_id = 0 ) {
+	public function get_available_slots( $product_id, $date, $resource_id = 0, $mode = '' ) {
 		$product_id  = (int) $product_id;
 		$resource_id = (int) $resource_id;
 		$out         = array();
@@ -307,8 +305,24 @@ class WC_Booking_Calendar_Availability_Manager {
 		}
 
 		$slots       = (array) get_option( $this->option_prefix . 'time_slots', array() );
-		$mode_config = $this->get_default_mode();
+		$mode_config = '' === $mode ? $this->get_default_mode() : $this->get_mode_config( $mode );
 		$capacity    = $mode_config ? (int) $mode_config['max_per_slot'] : 0;
+		if ( $mode_config && ! empty( $mode_config['full_day_block'] ) ) {
+			global $wpdb;
+			$booked_for_day = (int) $wpdb->get_var(
+				$wpdb->prepare(
+					"SELECT COUNT(*) FROM {$this->bookings_table}
+					 WHERE product_id = %d
+					   AND booking_date = %s
+					   AND status NOT IN ('cancelled','refunded','failed')",
+					$product_id,
+					$date
+				)
+			);
+			if ( $booked_for_day > 0 ) {
+				return array();
+			}
+		}
 
 		foreach ( $slots as $slot ) {
 			if ( empty( $slot['enabled'] ) ) {
@@ -327,7 +341,7 @@ class WC_Booking_Calendar_Availability_Manager {
 			);
 		}
 
-		return apply_filters( 'wc_booking_calendar_available_slots', $out, $product_id, $date, $resource_id );
+		return apply_filters( 'wc_booking_calendar_available_slots', $out, $product_id, $date, $resource_id, $mode );
 	}
 
 	/* ------------------------------------------------------------------
@@ -383,9 +397,18 @@ class WC_Booking_Calendar_Availability_Manager {
 		// Also support legacy advanced[blackout_dates].
 		$advanced = (array) get_option( $this->option_prefix . 'advanced', array() );
 		if ( ! empty( $advanced['blackout_dates'] ) && is_array( $advanced['blackout_dates'] ) ) {
-			$blackout = array_unique( array_merge( $blackout, $advanced['blackout_dates'] ) );
+			$blackout = array_unique( array_merge( $blackout, (array) $advanced['blackout_dates'] ) );
 		}
-		return in_array( $date, $blackout, true );
+		
+		// Ensure date format consistency for comparison
+		$date = date('Y-m-d', strtotime($date));
+		foreach($blackout as $b_date) {
+			if (date('Y-m-d', strtotime($b_date)) === $date) {
+				return true;
+			}
+		}
+		
+		return false;
 	}
 
 	/**
@@ -482,10 +505,10 @@ class WC_Booking_Calendar_Availability_Manager {
 
 		foreach ( $modes as $m ) {
 			$name_lc = strtolower( $m['name'] ?? '' );
-			if ( strtolower( $m['name'] ?? '' ) === $mode ) {
+			$key_lc  = strtolower( $m['key'] ?? sanitize_title( $m['name'] ?? '' ) );
+			if ( $key_lc === $mode || strtolower( $m['name'] ?? '' ) === $mode ) {
 				return $this->normalize_mode( $m );
 			}
-			// "Guided Tour" matches mode "guided"; "Self-Directed Walk" matches "self".
 			if ( str_starts_with( $name_lc, $mode ) || str_contains( $name_lc, $mode ) ) {
 				return $this->normalize_mode( $m );
 			}
@@ -495,6 +518,7 @@ class WC_Booking_Calendar_Availability_Manager {
 		if ( 'guided' === $mode ) {
 			return array(
 				'id'             => 1,
+				'key'            => 'guided',
 				'name'           => 'Guided Tour',
 				'description'    => '',
 				'full_day_block' => 1,
@@ -505,6 +529,7 @@ class WC_Booking_Calendar_Availability_Manager {
 		if ( 'self' === $mode || 'self-directed' === $mode ) {
 			return array(
 				'id'             => 2,
+				'key'            => 'self',
 				'name'           => 'Self-Directed Walk',
 				'description'    => '',
 				'full_day_block' => 0,
@@ -525,6 +550,7 @@ class WC_Booking_Calendar_Availability_Manager {
 	protected function normalize_mode( $m ) {
 		return array(
 			'id'             => isset( $m['id'] ) ? (int) $m['id'] : 0,
+			'key'            => isset( $m['key'] ) && '' !== $m['key'] ? sanitize_title( $m['key'] ) : sanitize_title( $m['name'] ?? '' ),
 			'name'           => isset( $m['name'] ) ? (string) $m['name'] : '',
 			'description'    => isset( $m['description'] ) ? (string) $m['description'] : '',
 			'full_day_block' => ! empty( $m['full_day_block'] ) ? 1 : 0,
@@ -657,17 +683,21 @@ class WC_Booking_Calendar_Availability_Manager {
 		$advanced = (array) get_option(
 			$this->option_prefix . 'advanced',
 			array(
-				'peak_days'        => array( 'Saturday', 'Sunday' ),
-				'peak_multiplier'  => 1.0,
-				'blackout_dates'   => array(),
-				'seasonal_pricing' => array(),
+				'peak_days'       => array( 'Saturday', 'Sunday' ),
+				'peak_multiplier' => 1.0,
+				'blackout_dates'  => array(),
+			)
+		);
+		$blackout_dates = array_unique(
+			array_merge(
+				(array) get_option( $this->option_prefix . 'blackout_dates', array() ),
+				isset( $advanced['blackout_dates'] ) ? (array) $advanced['blackout_dates'] : array()
 			)
 		);
 		return array(
-			'peak_days'        => isset( $advanced['peak_days'] ) ? (array) $advanced['peak_days'] : array(),
-			'peak_multiplier'  => isset( $advanced['peak_multiplier'] ) ? (float) $advanced['peak_multiplier'] : 1.0,
-			'blackout_dates'   => isset( $advanced['blackout_dates'] ) ? (array) $advanced['blackout_dates'] : array(),
-			'seasonal_pricing' => isset( $advanced['seasonal_pricing'] ) ? (array) $advanced['seasonal_pricing'] : array(),
+			'peak_days'       => isset( $advanced['peak_days'] ) ? (array) $advanced['peak_days'] : array(),
+			'peak_multiplier' => isset( $advanced['peak_multiplier'] ) ? (float) $advanced['peak_multiplier'] : 1.0,
+			'blackout_dates'  => array_values( $blackout_dates ),
 		);
 	}
 

@@ -618,7 +618,11 @@ class WC_Booking_Calendar_Booking_CPT {
 		update_post_meta( $booking_id, '_booking_person_count', $person_count );
 		update_post_meta( $booking_id, '_booking_limited_mobility', (string) $item->get_meta( '_booking_limited_mobility' ) );
 		update_post_meta( $booking_id, '_booking_special_requests', (string) $item->get_meta( '_booking_special_requests' ) );
-		update_post_meta( $booking_id, '_booking_total_price', (float) $item->get_total() );
+		$full_amount = (float) $item->get_meta( '_booking_full_amount' );
+		if ( $full_amount <= 0 ) {
+			$full_amount = (float) $item->get_total();
+		}
+		update_post_meta( $booking_id, '_booking_total_price', $full_amount );
 		update_post_meta( $booking_id, '_booking_handle', self::generate_booking_id( $booking_id ) );
 
 		$item->add_meta_data( '_booking_id', $booking_id, true );

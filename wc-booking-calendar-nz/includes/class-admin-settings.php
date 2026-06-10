@@ -45,6 +45,7 @@ class WC_Booking_Calendar_Admin_Settings {
 	private function __construct() {
 		add_action( 'admin_menu', array( $this, 'add_settings_page' ) );
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
+		add_action( 'admin_post_wc_booking_calendar_save_settings', array( $this, 'save_settings' ) );
 	}
 
 	/**
@@ -69,26 +70,7 @@ class WC_Booking_Calendar_Admin_Settings {
 	 * @return void
 	 */
 	public function register_settings() {
-		$options = array(
-			'wc_booking_calendar_time_slots'      => array( $this, 'sanitize_time_slots' ),
-			'wc_booking_calendar_days_of_week'    => array( $this, 'sanitize_days_of_week' ),
-			'wc_booking_calendar_booking_modes'   => array( $this, 'sanitize_booking_modes' ),
-			'wc_booking_calendar_person_types'    => array( $this, 'sanitize_person_types' ),
-			'wc_booking_calendar_notifications'   => array( $this, 'sanitize_notifications' ),
-			'wc_booking_calendar_advanced'        => array( $this, 'sanitize_advanced' ),
-			'wc_booking_calendar_gst_inclusive'   => 'sanitize_text_field',
-			'wc_booking_calendar_min_group_size'  => 'absint',
-			'wc_booking_calendar_max_group_size'  => 'absint',
-			'wc_booking_calendar_lead_time'       => 'absint',
-			'wc_booking_calendar_advance_window'  => 'absint',
-			'wc_booking_calendar_advance_days'    => 'absint',
-			'wc_booking_calendar_lead_time_hours' => 'absint',
-			'wc_booking_calendar_timezone'        => 'sanitize_text_field',
-			'wc_booking_calendar_blackout_dates'  => array( $this, 'sanitize_blackout_dates' ),
-			'wc_booking_calendar_morning_tea_price' => array( $this, 'sanitize_decimal' ),
-		);
-
-		foreach ( $options as $key => $callback ) {
+		foreach ( $this->get_option_sanitizers() as $key => $callback ) {
 			register_setting(
 				self::OPTION_GROUP,
 				$key,
@@ -168,12 +150,13 @@ class WC_Booking_Calendar_Admin_Settings {
 				<?php endforeach; ?>
 			</h2>
 
-			<form method="post" action="options.php">
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<?php
-				settings_fields( self::OPTION_GROUP );
-
-				// Make sure the active tab's options are submitted even if the
-				// template doesn't render every input on every tab.
+				wp_nonce_field( 'wc_booking_calendar_save_settings', 'wc_booking_calendar_settings_nonce' );
+				?>
+				<input type="hidden" name="action" value="wc_booking_calendar_save_settings" />
+				<input type="hidden" name="tab" value="<?php echo esc_attr( $active_tab ); ?>" />
+				<?php
 				$notifications = (array) get_option( 'wc_booking_calendar_notifications', array() );
 
 				$template = WC_BOOKING_CALENDAR_PLUGIN_DIR . 'admin/templates/' . $tabs[ $active_tab ]['template'];
@@ -188,6 +171,145 @@ class WC_Booking_Calendar_Admin_Settings {
 			</form>
 		</div>
 		<?php
+	}
+
+	/**
+	 * Return the sanitiser map used both by register_setting() and custom saves.
+	 *
+	 * @return array<string,callable|string>
+	 */
+	protected function get_option_sanitizers() {
+		return array(
+			'wc_booking_calendar_time_slots'        => array( $this, 'sanitize_time_slots' ),
+			'wc_booking_calendar_days_of_week'      => array( $this, 'sanitize_days_of_week' ),
+			'wc_booking_calendar_booking_modes'     => array( $this, 'sanitize_booking_modes' ),
+			'wc_booking_calendar_addons'            => array( $this, 'sanitize_addons' ),
+			'wc_booking_calendar_person_types'      => array( $this, 'sanitize_person_types' ),
+			'wc_booking_calendar_notifications'     => array( $this, 'sanitize_notifications' ),
+			'wc_booking_calendar_advanced'          => array( $this, 'sanitize_advanced' ),
+			'wc_booking_calendar_gst_inclusive'     => 'sanitize_text_field',
+			'wc_booking_calendar_min_group_size'    => 'absint',
+			'wc_booking_calendar_max_group_size'    => 'absint',
+			'wc_booking_calendar_lead_time'         => 'absint',
+			'wc_booking_calendar_advance_window'    => 'absint',
+			'wc_booking_calendar_advance_days'      => 'absint',
+			'wc_booking_calendar_lead_time_hours'   => 'absint',
+			'wc_booking_calendar_deposit_percentage' => 'absint',
+			'wc_booking_calendar_timezone'          => 'sanitize_text_field',
+			'wc_booking_calendar_blackout_dates'    => array( $this, 'sanitize_blackout_dates' ),
+			'wc_booking_calendar_morning_tea_price' => array( $this, 'sanitize_decimal' ),
+		);
+	}
+
+	/**
+	 * Group settings by admin tab so saving one tab doesn't wipe the others.
+	 *
+	 * @return array<string,string[]>
+	 */
+	protected function get_tab_option_map() {
+		return array(
+			'general'       => array(
+				'wc_booking_calendar_lead_time',
+				'wc_booking_calendar_advance_window',
+				'wc_booking_calendar_advance_days',
+				'wc_booking_calendar_lead_time_hours',
+				'wc_booking_calendar_deposit_percentage',
+				'wc_booking_calendar_addons',
+				'wc_booking_calendar_timezone',
+				'wc_booking_calendar_min_group_size',
+				'wc_booking_calendar_max_group_size',
+			),
+			'time-slots'    => array(
+				'wc_booking_calendar_days_of_week',
+				'wc_booking_calendar_time_slots',
+			),
+			'booking-modes' => array(
+				'wc_booking_calendar_booking_modes',
+			),
+			'person-types'  => array(
+				'wc_booking_calendar_person_types',
+			),
+			'notifications' => array(
+				'wc_booking_calendar_notifications',
+			),
+			'advanced'      => array(
+				'wc_booking_calendar_advanced',
+				'wc_booking_calendar_blackout_dates',
+			),
+		);
+	}
+
+	/**
+	 * Save only the active tab's settings.
+	 *
+	 * Avoids WordPress options.php behaviour that submits all registered
+	 * settings in the group and clears missing keys from other tabs.
+	 *
+	 * @return void
+	 */
+	public function save_settings() {
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			wp_die( esc_html__( 'Permission denied.', 'wc-booking-calendar-nz' ) );
+		}
+
+		check_admin_referer( 'wc_booking_calendar_save_settings', 'wc_booking_calendar_settings_nonce' );
+
+		$tabs       = $this->get_tabs();
+		$active_tab = isset( $_POST['tab'] ) ? sanitize_key( wp_unslash( $_POST['tab'] ) ) : 'general';
+		if ( ! isset( $tabs[ $active_tab ] ) ) {
+			$active_tab = 'general';
+		}
+
+		$tab_option_map = $this->get_tab_option_map();
+		$option_keys    = $tab_option_map[ $active_tab ] ?? array();
+		$sanitizers     = $this->get_option_sanitizers();
+		$reset_on_missing = array(
+			'wc_booking_calendar_days_of_week',
+			'wc_booking_calendar_notifications',
+			'wc_booking_calendar_advanced',
+			'wc_booking_calendar_blackout_dates',
+		);
+
+		foreach ( $option_keys as $option_key ) {
+			$has_posted_value = array_key_exists( $option_key, $_POST );
+			if ( ! $has_posted_value && ! in_array( $option_key, $reset_on_missing, true ) ) {
+				continue;
+			}
+
+			$raw_value = $has_posted_value ? wp_unslash( $_POST[ $option_key ] ) : array();
+			if ( isset( $sanitizers[ $option_key ] ) && is_callable( $sanitizers[ $option_key ] ) ) {
+				$clean_value = call_user_func( $sanitizers[ $option_key ], $raw_value );
+			} elseif ( isset( $sanitizers[ $option_key ] ) && is_string( $sanitizers[ $option_key ] ) && function_exists( $sanitizers[ $option_key ] ) ) {
+				$clean_value = call_user_func( $sanitizers[ $option_key ], $raw_value );
+			} else {
+				$clean_value = $raw_value;
+			}
+
+			update_option( $option_key, $clean_value );
+		}
+
+		if ( 'advanced' === $active_tab ) {
+			$blackout = (array) get_option( 'wc_booking_calendar_blackout_dates', array() );
+			$advanced = (array) get_option( 'wc_booking_calendar_advanced', array() );
+			$advanced['blackout_dates'] = $blackout;
+			if ( isset( $advanced['seasonal_pricing'] ) ) {
+				unset( $advanced['seasonal_pricing'] );
+			}
+			update_option( 'wc_booking_calendar_advanced', $advanced );
+		}
+
+		$redirect_url = add_query_arg(
+			array(
+				'post_type'         => 'wc_booking',
+				'page'              => self::PAGE_SLUG,
+				'tab'               => $active_tab,
+				'settings-updated'  => 'true',
+			),
+			admin_url( 'edit.php' )
+		);
+
+		wp_safe_redirect( $redirect_url );
+		exit;
 	}
 
 	/* ------------------------------------------------------------------
@@ -300,8 +422,9 @@ class WC_Booking_Calendar_Admin_Settings {
 			}
 			$out[] = array(
 				'id'             => isset( $row['id'] ) ? (int) $row['id'] : $i,
+				'key'            => isset( $row['key'] ) && '' !== $row['key'] ? $this->normalize_machine_key( $row['key'], $name, 'mode' ) : $this->normalize_mode_key_from_name( $name, $i ),
 				'name'           => $name,
-				'description'    => isset( $row['description'] ) ? sanitize_text_field( $row['description'] ) : '',
+				'description'    => isset( $row['description'] ) ? sanitize_textarea_field( $row['description'] ) : '',
 				'full_day_block' => ! empty( $row['full_day_block'] ) ? 1 : 0,
 				'show_addons'    => ! empty( $row['show_addons'] ) ? 1 : 0,
 				'max_per_slot'   => isset( $row['max_per_slot'] ) ? max( 0, (int) $row['max_per_slot'] ) : 0,
@@ -405,11 +528,9 @@ class WC_Booking_Calendar_Admin_Settings {
 		}
 
 		return array(
-			'peak_days'           => array_values( array_unique( $peak_days_clean ) ),
-			'peak_multiplier'     => isset( $input['peak_multiplier'] ) ? (float) $input['peak_multiplier'] : 1.0,
-			'advance_booking_days' => isset( $input['advance_booking_days'] ) ? max( 0, (int) $input['advance_booking_days'] ) : 90,
-			'blackout_dates'      => $blackout,
-			'seasonal_pricing'    => ! empty( $input['seasonal_pricing'] ) ? 1 : 0,
+			'peak_days'       => array_values( array_unique( $peak_days_clean ) ),
+			'peak_multiplier' => isset( $input['peak_multiplier'] ) ? (float) $input['peak_multiplier'] : 1.0,
+			'blackout_dates'  => $blackout,
 		);
 	}
 
@@ -449,5 +570,86 @@ class WC_Booking_Calendar_Admin_Settings {
 	 */
 	public function sanitize_decimal( $input ) {
 		return (float) wc_format_decimal( $input );
+	}
+
+	/**
+	 * Sanitise booking add-ons.
+	 *
+	 * @param mixed $input Raw input.
+	 * @return array
+	 */
+	public function sanitize_addons( $input ) {
+		if ( is_string( $input ) ) {
+			$decoded = json_decode( $input, true );
+			if ( is_array( $decoded ) ) {
+				$input = $decoded;
+			} else {
+				return (array) get_option( 'wc_booking_calendar_addons', array() );
+			}
+		}
+		if ( ! is_array( $input ) ) {
+			return (array) get_option( 'wc_booking_calendar_addons', array() );
+		}
+
+		$out = array();
+		$i   = 1;
+		foreach ( $input as $row ) {
+			if ( ! is_array( $row ) ) {
+				continue;
+			}
+			$label = isset( $row['label'] ) ? sanitize_text_field( $row['label'] ) : '';
+			if ( '' === $label ) {
+				continue;
+			}
+
+			$out[] = array(
+				'id'         => isset( $row['id'] ) ? (int) $row['id'] : $i,
+				'key'        => isset( $row['key'] ) && '' !== $row['key'] ? $this->normalize_machine_key( $row['key'], $label, 'addon' ) : $this->normalize_machine_key( '', $label, 'addon_' . $i ),
+				'label'      => $label,
+				'price'      => isset( $row['price'] ) ? (float) wc_format_decimal( $row['price'] ) : 0.0,
+				'per_person' => ! empty( $row['per_person'] ) ? 1 : 0,
+				'enabled'    => ! empty( $row['enabled'] ) ? 1 : 0,
+			);
+			$i++;
+		}
+
+		return $out;
+	}
+
+	/**
+	 * Normalise saved machine keys.
+	 *
+	 * @param string $raw      Raw key.
+	 * @param string $fallback Fallback label.
+	 * @param string $prefix   Prefix if key becomes empty.
+	 * @return string
+	 */
+	protected function normalize_machine_key( $raw, $fallback = '', $prefix = 'item' ) {
+		$key = sanitize_title( (string) $raw );
+		if ( '' === $key && '' !== $fallback ) {
+			$key = sanitize_title( (string) $fallback );
+		}
+		if ( '' === $key ) {
+			$key = sanitize_title( (string) $prefix );
+		}
+		return $key;
+	}
+
+	/**
+	 * Generate a sensible booking-mode key from a human label.
+	 *
+	 * @param string $name  Mode name.
+	 * @param int    $index Row index.
+	 * @return string
+	 */
+	protected function normalize_mode_key_from_name( $name, $index ) {
+		$name_lc = strtolower( (string) $name );
+		if ( false !== strpos( $name_lc, 'guided' ) ) {
+			return 'guided';
+		}
+		if ( false !== strpos( $name_lc, 'self' ) || false !== strpos( $name_lc, 'walk' ) ) {
+			return 'self';
+		}
+		return $this->normalize_machine_key( '', $name, 'mode_' . $index );
 	}
 }

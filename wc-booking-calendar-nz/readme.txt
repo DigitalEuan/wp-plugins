@@ -79,7 +79,39 @@ availability and pricing logic. Run:
 
 == Changelog ==
 
-= 1.1.1 =
+10.06.26
+
+For settings saving, replaced the tab form save flow so it no longer uses the generic group-wide options.php behavior. It now saves through a dedicated handler that updates only the active tab’s option keys, which prevents other tabs from being touched. Also made sure checkbox-style settings still clear correctly when unchecked.
+
+For the product type, changed the bootstrap so class-wc-product-bookable-tour.php is loaded with the main plugin includes, and changed the product integration class to load the custom product class immediately instead of waiting for a late hook. Also gave WC_Product_Bookable_Tour a constructor that explicitly sets its internal product type to bookable_tour, so WooCommerce keeps it mapped correctly during save/edit cycles.
+
+Then:
+
+The product page booking UI is now driven by a rebuilt frontend form template and JS flow. The form now renders booking mode, date, time slot, optional guide/resource selection, person counts, accessibility/special requests, live total price, availability feedback, and the Book Now submit button in a consistent WooCommerce cart form. Slot loading now refreshes when date, mode, or resource changes, and price/availability refresh dynamically as the customer edits the booking. booking-form.php frontend.js class-frontend-handler.php
+
+On the server side, I tightened the booking validation so it no longer relies on frontend JavaScript alone. The plugin now enforces required date/time, at least one person, guided-tour minimum group size of 10, and required resource selection when the product is configured to require one. I also added cart/checkout display formatting so the chosen booking details show up properly with the WooCommerce item data instead of disappearing into raw metadata. hooks.php
+
+For persistence, the checkout booking flow now pushes the booking into the custom bookings table with the extra booking details needed for operations, including special requests and limited-mobility flags. I also added order-status syncing so bookings are marked confirmed when the WooCommerce order reaches processing/completed, while the existing cancel/refund release path remains in place. hooks.php class-availability-manager.php
+
+Then:
+
+The checkout/PayPal path was hardened so the plugin no longer pushes a zero or negative payable amount from its deposit logic. Deposit handling now keeps the booking total recorded separately while charging only the selected amount due today, and it guards against invalid $0.00 checkout amounts.
+
+Customers can choose either the full amount or the configured deposit amount when the deposit percentage is between 1 and 99.
+
+Blackout dates are now synced properly between Advanced Settings, frontend date blocking, and server-side availability checks, so blocked dates should stop bookings consistently.
+
+Booking Mode descriptions are preserved through settings sanitization and continue to drive the styled mode description shown on the product page.
+
+The duplicate Lead Time setting in Advanced was removed, leaving Lead Time managed from General only.
+
+“Show Add-ons” now ties into selectable add-ons such as Morning Tea, with optional pricing and per-person pricing support. Enabled add-ons are shown only for modes that allow them.
+
+The product-page description panel now follows the selected Booking Mode description and updates live with the user’s mode choice.
+
+Seasonal Pricing was effectively removed from active settings handling and cleaned out of migrated advanced settings data.
+
+= 1.1.1 = 09.06.26
 * Critical: added missing `<?php` opening tag to 6 PHP files (main plugin file, both CPT classes, frontend handler, admin class and admin-settings) — previously these would output their PHP source as plain HTML.
 * Critical: implemented the missing `WC_Booking_Calendar_Admin_Settings` class (settings page, six tabs, all sanitisers and the settings submenu).
 * Critical: completed the availability manager — all previously-referenced helpers (`validate_date`, `validate_time`, `get_slot_by_time`, `is_day_available`, `get_default_mode`, `get_mode_config`, `check_resource_full_day`, `get_booked_count`, `get_product_rules`, `check_product_rules`, `get_general_rules`, `check_general_rules`, `update_availability`, `release_availability`, `get_available_slots`, `check_availability_with_person_types`) are now real methods. Removed invalid `throw new WP_Error(…)` calls.

@@ -1,483 +1,467 @@
-/**
- * WC Booking Calendar - Frontend JavaScript
- * Handles all frontend interactions
- */
-
 (function($) {
-    'use strict';
-    
-    // Global plugin object
-    var WCBookingCalendar = {
-        
-        /**
-         * Initialize plugin
-         */
-        init: function() {
-            this.initDatePicker();
-            this.initEventListeners();
-            this.initAddToCart();
-            this.initPriceCalculation();
-            this.initValidation();
-            this.initGuidedModeToggle();
-        },
-        
-        /**
-         * ========================================
-         * GUIDED MODE TOGGLE
-         * ========================================
-         */
-        initGuidedModeToggle: function() {
-            var $modeSelect = $('[name="booking_mode"]');
-            var $guidedOptions = $('#guided-options');
-            var $teaCheckbox = $('[name="booking_morning_tea"]');
-            
-            if (!$modeSelect.length || !$guidedOptions.length) {
-                return;
-            }
-            
-            var toggleGuidedOptions = function() {
-                if ($modeSelect.val() === 'guided') {
-                    $guidedOptions.show();
-                    if ($teaCheckbox.length && !$teaCheckbox.is(':checked')) {
-                        $teaCheckbox.prop('checked', true);
-                    }
-                } else {
-                    $guidedOptions.hide();
-                    if ($teaCheckbox.length) {
-                        $teaCheckbox.prop('checked', false);
-                    }
-                }
-            };
-            
-            // Run on change
-            $modeSelect.on('change', toggleGuidedOptions);
-            
-            // Run on load to set initial state
-            toggleGuidedOptions();
-        },
-        
-        /**
-         * ========================================
-         * DATE PICKER INITIALIZATION
-         * ========================================
-         */
-        initDatePicker: function() {
-            $('.wc-booking-form .date-picker').each(function() {
-                var $input = $(this);
-                var minDate = $input.data('min-date') || '';
-                var maxDate = $input.data('max-date') || '';
-                
-                // Initialize datepicker
-                $input.datepicker({
-                    dateFormat: 'yy-mm-dd',
-                    minDate: minDate,
-                    maxDate: maxDate,
-                    beforeShowDay: function(date) {
-                        return [true, '', ''];
-                    },
-                    onSelect: function(dateText) {
-                        WCBookingCalendar.loadTimeSlots(dateText);
-                        WCBookingCalendar.calculatePrice();
-                    }
-                });
-                
-                // Fix for NZ time zone
-                $input.datepicker('setDate', new Date());
-            });
-        },
-        
-        /**
-         * ========================================
-         * EVENT LISTENERS
-         * ========================================
-         */
-        initEventListeners: function() {
-            // Date change
-            $(document).on('change', '.wc-booking-form .date-picker', function() {
-                var date = $(this).val();
-                if (date) {
-                    WCBookingCalendar.loadTimeSlots(date);
-                }
-            });
-            
-            // Time slot change
-            $(document).on('change', '.wc-booking-form #booking_time', function() {
-                WCBookingCalendar.calculatePrice();
-                WCBookingCalendar.checkAvailability();
-            });
-            
-            // Resource change
-            $(document).on('change', '.wc-booking-form #resource_id', function() {
-                WCBookingCalendar.loadTimeSlots($('#booking_date').val());
-                WCBookingCalendar.checkAvailability();
-            });
-            
-            // Person type count change
-            $(document).on('input', '.wc-booking-form .person-type-input input', function() {
-                WCBookingCalendar.calculatePrice();
-                WCBookingCalendar.checkAvailability();
-            });
-            
-            // Limited mobility checkbox
-            $(document).on('change', '.wc-booking-form input[name="limited_mobility"]', function() {
-                var $message = $(this).closest('.limited-mobility').find('.limited-mobility-message');
-                if ($(this).is(':checked')) {
-                    $message.slideDown();
-                } else {
-                    $message.slideUp();
-                }
-            });
-            
-            // Add to cart button. If the booking form is rendered INSIDE the standard
-            // WooCommerce <form class="cart"> (single-product page), let the browser do
-            // the normal POST submit so WC's add-to-cart pipeline (with all our hooks)
-            // runs server-side. Otherwise, fall back to an AJAX submit.
-            $(document).on('click', '.wc-booking-form #booking-add-to-cart', function(e) {
-                var $cartForm = $(this).closest('form.cart');
-                if ($cartForm.length) {
-                    // Validate first; allow native submit only if valid.
-                    if (!WCBookingCalendar.validateForm()) {
-                        e.preventDefault();
-                    }
-                    return;
-                }
-                e.preventDefault();
-                WCBookingCalendar.handleAddToCart();
-            });
-        },
-        
-        /**
-         * ========================================
-         * LOAD TIME SLOTS
-         * ========================================
-         */
-        loadTimeSlots: function(date) {
-            var $select = $('#booking_time');
-            var $loading = $('#loading-slots');
-            
-            // Show loading
-            $loading.show();
-            $select.prop('disabled', true);
-            
-            $.ajax({
-                url: wc_booking_calendar.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'wc_booking_get_slots',
-                    nonce: wc_booking_calendar.nonce,
-                    product_id: $('#product_id').val(),
-                    date: date,
-                    resource_id: $('#resource_id').val()
-                },
-                success: function(response) {
-                    if (response.success) {
-                        WCBookingCalendar.populateTimeSlots(response.data.slots);
-                    } else {
-                        WCBookingCalendar.showError(response.data.message || 'Failed to load slots');
-                    }
-                    $loading.hide();
-                    $select.prop('disabled', false);
-                },
-                error: function() {
-                    WCBookingCalendar.showError('Network error');
-                    $loading.hide();
-                    $select.prop('disabled', false);
-                }
-            });
-        },
-        
-        /**
-         * Populate time slots dropdown
-         */
-        populateTimeSlots: function(slots) {
-            var $select = $('#booking_time');
-            $select.empty();
-            
-            if (slots.length === 0) {
-                $select.append('<option value="">' + wc_booking_calendar.i18n.no_slots + '</option>');
-                return;
-            }
-            
-            $.each(slots, function(index, slot) {
-                var option = '<option value="' + slot.start + '-' + slot.end + '" data-capacity="' + slot.available + '">' +
-                            slot.name + ' (' + slot.start + ' - ' + slot.end + ') - ' +
-                            (slot.available > 0 ? slot.available + ' spots' : 'Full') +
-                            '</option>';
-                $select.append(option);
-            });
-        },
-        
-        /**
-         * ========================================
-         * PRICE CALCULATION
-         * ========================================
-         */
-        calculatePrice: function() {
-            var product_id = $('#product_id').val();
-            var date = $('#booking_date').val();
-            var time = $('#booking_time').val();
-            var person_types = {};
-            
-            // Collect person types
-            $('.person-type-input input').each(function() {
-                var type_id = $(this).attr('id').replace('person_type_', '');
-                var count = parseInt($(this).val()) || 0;
-                if (count > 0) {
-                    person_types[type_id] = count;
-                }
-            });
-            
-            // Don't calculate if no person types
-            if ($.isEmptyObject(person_types)) {
-                $('#booking-total-price').text('0.00');
-                return;
-            }
-            
-            $.ajax({
-                url: wc_booking_calendar.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'wc_booking_calculate_price',
-                    nonce: wc_booking_calendar.nonce,
-                    product_id: product_id,
-                    person_types: person_types,
-                    date: date,
-                    time: time
-                },
-                success: function(response) {
-                    if (response.success) {
-                        // PHP returns either {total, total_formatted} or {price}.
-                        var amount = (response.data && (response.data.total !== undefined ? response.data.total : response.data.price)) || 0;
-                        $('#booking-total-price').text(
-                            WCBookingCalendar.formatCurrency(amount)
-                        );
-                        
-                        // Update breakdown display
-                        if (response.data.breakdown) {
-                            WCBookingCalendar.updatePriceBreakdown(response.data.breakdown);
-                        }
-                    }
-                }
-            });
-        },
-        
-        /**
-         * Update price breakdown display
-         */
-        updatePriceBreakdown: function(breakdown) {
-            // You can add a detailed breakdown view here
-            // For now, we just update the total
-        },
-        
-        /**
-         * Format currency
-         */
-        formatCurrency: function(amount) {
-            var symbol = (typeof wc_booking_calendar !== 'undefined' && wc_booking_calendar.currency_symbol)
-                ? wc_booking_calendar.currency_symbol
-                : '$';
-            return symbol + parseFloat(amount || 0).toFixed(2);
-        },
-        
-        /**
-         * ========================================
-         * AVAILABILITY CHECK
-         * ========================================
-         */
-        checkAvailability: function() {
-            var product_id = $('#product_id').val();
-            var date = $('#booking_date').val();
-            var time = $('#booking_time').val();
-            var resource_id = $('#resource_id').val();
-            var mode = $('.wc-booking-form').data('mode') || '';
-            var person_count = 0;
-            
-            // Calculate total person count
-            $('.person-type-input input').each(function() {
-                person_count += parseInt($(this).val()) || 0;
-            });
-            
-            if (!product_id || !date || !time) {
-                return;
-            }
-            
-            $.ajax({
-                url: wc_booking_calendar.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'wc_booking_check_availability',
-                    nonce: wc_booking_calendar.nonce,
-                    product_id: product_id,
-                    date: date,
-                    time: time,
-                    resource_id: resource_id,
-                    mode: mode,
-                    person_count: person_count
-                },
-                success: function(response) {
-                    if (response.success) {
-                        if (response.data.available) {
-                            $('.booking-availability-status').removeClass('unavailable').addClass('available');
-                            $('.availability-message').text('Available');
-                        } else {
-                            $('.booking-availability-status').removeClass('available').addClass('unavailable');
-                            $('.availability-message').text(response.data.message || 'Unavailable');
-                        }
-                    } else {
-                        $('.booking-availability-status').removeClass('available').addClass('unavailable');
-                        $('.availability-message').text(response.data.message || 'Error checking availability');
-                    }
-                }
-            });
-        },
-        
-        /**
-         * ========================================
-         * ADD TO CART
-         * ========================================
-         */
-        handleAddToCart: function() {
-            var $button = $('#booking-add-to-cart');
-            var $form = $('.wc-booking-form');
-            
-            // Validate form
-            if (!WCBookingCalendar.validateForm()) {
-                return;
-            }
-            
-            // Disable button
-            $button.prop('disabled', true).text('Adding...');
-            
-            // Collect form data
-            var formData = {
-                action: 'wc_booking_add_to_cart',
-                nonce: wc_booking_calendar.nonce,
-                booking_add_to_cart: 1,
-                product_id: $('#product_id').val(),
-                booking_date: $('#booking_date').val(),
-                booking_time: $('#booking_time').val(),
-                resource_id: $('#resource_id').val(),
-                person_types: {},
-                limited_mobility: $('input[name="limited_mobility"]').is(':checked') ? 'yes' : 'no',
-                special_requests: $('#special_requests').val()
-            };
-            
-            // Collect person types
-            $('.person-type-input input').each(function() {
-                var type_id = $(this).attr('id').replace('person_type_', '');
-                var count = parseInt($(this).val()) || 0;
-                if (count > 0) {
-                    formData.person_types[type_id] = count;
-                }
-            });
-            
-            $.ajax({
-                url: wc_booking_calendar.ajax_url,
-                type: 'POST',
-                data: formData,
-                success: function(response) {
-                    if (response.success) {
-                        // Show confirmation
-                        $('#booking-confirmation').show();
-                        $('.booking-add-to-cart').text('✓ Added to Cart');
-                        
-                        // Optional: Redirect to cart
-                        // window.location.href = wc_checkout_params.cart_url;
-                        
-                        // Re-enable button after delay
-                        setTimeout(function() {
-                            $button.prop('disabled', false).text('Book Now');
-                        }, 2000);
-                    } else {
-                        // Show error
-                        alert(response.data.message || 'Failed to add to cart');
-                        $button.prop('disabled', false).text('Book Now');
-                    }
-                },
-                error: function() {
-                    alert('Network error. Please try again.');
-                    $button.prop('disabled', false).text('Book Now');
-                }
-            });
-        },
-        
-        /**
-         * ========================================
-         * FORM VALIDATION
-         * ========================================
-         */
-        validateForm: function() {
-            var $form = $('.wc-booking-form');
-            var isValid = true;
-            var errors = [];
-            
-            // Check date
-            if (!$('#booking_date').val()) {
-                errors.push('Please select a date');
-                isValid = false;
-            }
-            
-            // Check time
-            if (!$('#booking_time').val()) {
-                errors.push('Please select a time slot');
-                isValid = false;
-            }
-            
-            // Check person types (at least one)
-            var hasPersonTypes = false;
-            $('.person-type-input input').each(function() {
-                if (parseInt($(this).val()) > 0) {
-                    hasPersonTypes = true;
-                }
-            });
-            
-            if (!hasPersonTypes) {
-                errors.push('Please select at least one person type');
-                isValid = false;
-            }
-            
-            // Check resource if required
-            if ($('.wc-booking-form #resource_id').is('[required]') && 
-                !$('#resource_id').val()) {
-                errors.push('Please select a guide/resource');
-                isValid = false;
-            }
-            
-            // Show errors
-            if (errors.length > 0) {
-                alert(errors.join('\n'));
-                isValid = false;
-            }
-            
-            return isValid;
-        },
-        
-        /**
-         * ========================================
-         * UTILITY FUNCTIONS
-         * ========================================
-         */
-        showError: function(message) {
-            alert(message);
-        },
-        
-        // (duplicated formatCurrency intentionally removed; the version above wins)
-    };
-    
-    /**
-     * Initialize when DOM is ready
-     */
-    $(document).ready(function() {
-        WCBookingCalendar.init();
-    });
-    
-    /**
-     * Initialize when WooCommerce is ready
-     */
-    if (typeof wc !== 'undefined') {
-        $(document.body).on('updated_checkout', function() {
-            // Recalculate if needed
-        });
-    }
+	'use strict';
 
+	var pluginConfig = window.wc_booking_calendar || {};
+
+	function parseJsonAttr($el, attrName) {
+		var raw = $el.attr(attrName) || '[]';
+		try {
+			return JSON.parse(raw);
+		} catch (e) {
+			return [];
+		}
+	}
+
+	function nl2Html(text) {
+		var safe = $('<div/>').text(text || '').html();
+		return safe.replace(/\n/g, '<br>');
+	}
+
+	function normalizeDateString(value) {
+		var raw = $.trim(String(value || ''));
+		var match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+		if (match) {
+			return match[1] + '-' + match[2] + '-' + match[3];
+		}
+
+		var parsed = new Date(raw);
+		if (isNaN(parsed.getTime())) {
+			return raw;
+		}
+
+		var year = parsed.getFullYear();
+		var month = String(parsed.getMonth() + 1).padStart(2, '0');
+		var day = String(parsed.getDate()).padStart(2, '0');
+		return year + '-' + month + '-' + day;
+	}
+
+	function getWeekdayKey(isoDate) {
+		var match = normalizeDateString(isoDate).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+		var map = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+		if (!match) {
+			return '';
+		}
+		var date = new Date(parseInt(match[1], 10), parseInt(match[2], 10) - 1, parseInt(match[3], 10));
+		return map[date.getDay()] || '';
+	}
+
+	function buildBlackoutLookup() {
+		var lookup = {};
+		$.each(pluginConfig.blackout_dates || [], function(_, value) {
+			var normalized = normalizeDateString(value);
+			if (normalized) {
+				lookup[normalized] = true;
+			}
+		});
+		return lookup;
+	}
+
+	var WCBookingCalendar = {
+		init: function() {
+			$('.wc-booking-form').each(function() {
+				WCBookingCalendar.setupForm($(this));
+			});
+		},
+
+		setupForm: function($form) {
+			$form.data('modeConfigs', parseJsonAttr($form, 'data-booking-modes'));
+			$form.data('addonConfigs', parseJsonAttr($form, 'data-booking-addons'));
+			$form.data('depositPercentage', parseInt($form.attr('data-deposit-percentage'), 10) || 0);
+			$form.data('blackoutLookup', buildBlackoutLookup());
+
+			this.initDatePicker($form);
+			this.bindEvents($form);
+			this.updateModeUI($form);
+			this.updatePriceDisplay($form, { total: 0, due_today: 0 });
+			this.clearAvailabilityStatus($form);
+		},
+
+		bindEvents: function($form) {
+			$form.on('change', '#booking_mode', function() {
+				WCBookingCalendar.updateModeUI($form);
+				WCBookingCalendar.resetTimeSlots($form);
+				WCBookingCalendar.clearAvailabilityStatus($form);
+				if ($form.find('#booking_date').val()) {
+					WCBookingCalendar.loadTimeSlots($form, $form.find('#booking_date').val());
+				}
+				WCBookingCalendar.calculatePrice($form);
+			});
+
+			$form.on('change', '#booking_date', function() {
+				WCBookingCalendar.handleDateChange($form, $(this).val());
+			});
+
+			$form.on('change', '#booking_time, #resource_id, input[name="booking_payment_option"], input[name="booking_addons[]"]', function() {
+				WCBookingCalendar.calculatePrice($form);
+				WCBookingCalendar.checkAvailability($form);
+			});
+
+			$form.on('input change', '.person-type-input input', function() {
+				WCBookingCalendar.calculatePrice($form);
+				WCBookingCalendar.checkAvailability($form);
+			});
+
+			$form.on('click', '#booking-add-to-cart', function(e) {
+				var $cartForm = $(this).closest('form.cart');
+				if ($cartForm.length && !WCBookingCalendar.validateForm($form)) {
+					e.preventDefault();
+				}
+			});
+		},
+
+		initDatePicker: function($form) {
+			var $input = $form.find('.date-picker');
+			var minDate = $input.data('min-date') || '';
+			var maxDate = $input.data('max-date') || '';
+			var blackoutLookup = $form.data('blackoutLookup') || {};
+			var openDays = pluginConfig.bookable_days || { monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 1, sunday: 1 };
+			var map = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+			$input.datepicker({
+				dateFormat: pluginConfig.date_format || 'yy-mm-dd',
+				minDate: minDate,
+				maxDate: maxDate,
+				beforeShowDay: function(date) {
+					var iso = $.datepicker.formatDate('yy-mm-dd', date);
+					var dayName = map[date.getDay()];
+					if (blackoutLookup[iso]) {
+						return [false, 'wc-booking-blackout', 'Unavailable'];
+					}
+					if (openDays[dayName] === 0 || openDays[dayName] === '0') {
+						return [false, 'wc-booking-closed-day', 'Unavailable'];
+					}
+					return [true, '', ''];
+				},
+				onSelect: function(dateText) {
+					WCBookingCalendar.handleDateChange($form, dateText);
+				}
+			});
+		},
+
+		handleDateChange: function($form, rawDate) {
+			var normalizedDate = normalizeDateString(rawDate);
+			$form.find('#booking_date').val(normalizedDate);
+			WCBookingCalendar.resetTimeSlots($form);
+			WCBookingCalendar.clearAvailabilityStatus($form);
+
+			if (!normalizedDate) {
+				return;
+			}
+
+			if (WCBookingCalendar.isDateBlocked($form, normalizedDate)) {
+				WCBookingCalendar.setAvailabilityStatus(
+					$form,
+					'unavailable',
+					(pluginConfig.i18n && pluginConfig.i18n.unavailable) || 'Unavailable'
+				);
+				return;
+			}
+
+			WCBookingCalendar.loadTimeSlots($form, normalizedDate);
+			WCBookingCalendar.calculatePrice($form);
+		},
+
+		isDateBlocked: function($form, dateValue) {
+			var normalizedDate = normalizeDateString(dateValue);
+			var blackoutLookup = $form.data('blackoutLookup') || {};
+			var openDays = pluginConfig.bookable_days || {};
+			var weekdayKey = getWeekdayKey(normalizedDate);
+
+			if (!normalizedDate) {
+				return false;
+			}
+			if (blackoutLookup[normalizedDate]) {
+				return true;
+			}
+			if (weekdayKey && (openDays[weekdayKey] === 0 || openDays[weekdayKey] === '0')) {
+				return true;
+			}
+			return false;
+		},
+
+		getSelectedAddons: function($form) {
+			var selected = [];
+			$form.find('input[name="booking_addons[]"]:checked').each(function() {
+				selected.push($(this).val());
+			});
+			return selected;
+		},
+
+		getPersonTypes: function($form) {
+			var personTypes = {};
+			$form.find('.person-type-input input').each(function() {
+				var typeId = ($(this).attr('id') || '').replace('person_type_', '');
+				var count = parseInt($(this).val(), 10) || 0;
+				if (count > 0) {
+					personTypes[typeId] = count;
+				}
+			});
+			return personTypes;
+		},
+
+		updateModeUI: function($form) {
+			var selectedMode = $form.find('#booking_mode').val();
+			var modeConfigs = $form.data('modeConfigs') || [];
+			var activeMode = null;
+			$.each(modeConfigs, function(_, mode) {
+				if (mode.key === selectedMode) {
+					activeMode = mode;
+					return false;
+				}
+			});
+			activeMode = activeMode || modeConfigs[0] || null;
+
+			var $desc = $form.find('#booking-mode-description');
+			if (activeMode && activeMode.description) {
+				$desc.find('.booking-mode-description__inner').html(nl2Html(activeMode.description));
+				$desc.show();
+			} else {
+				$desc.hide();
+			}
+
+			var showAddons = !!(activeMode && activeMode.show_addons);
+			var $addonsSection = $form.find('#booking-addons-section');
+			if ($addonsSection.length) {
+				var hasAddonChoices = $addonsSection.find('input[type="checkbox"]').length > 0;
+				if (showAddons && hasAddonChoices) {
+					$addonsSection.show();
+				} else {
+					$addonsSection.hide();
+					$addonsSection.find('input[type="checkbox"]').prop('checked', false);
+				}
+			}
+		},
+
+		loadTimeSlots: function($form, date) {
+			var normalizedDate = normalizeDateString(date);
+			var $select = $form.find('#booking_time');
+			var $loading = $form.find('.loading-slots');
+
+			if (!normalizedDate || WCBookingCalendar.isDateBlocked($form, normalizedDate)) {
+				WCBookingCalendar.resetTimeSlots($form, true);
+				WCBookingCalendar.setAvailabilityStatus(
+					$form,
+					'unavailable',
+					(pluginConfig.i18n && pluginConfig.i18n.no_slots) || 'No time slots available for this date.'
+				);
+				return;
+			}
+
+			$loading.show();
+			$select.prop('disabled', true);
+			WCBookingCalendar.clearAvailabilityStatus($form);
+
+			$.ajax({
+				url: pluginConfig.ajax_url,
+				type: 'POST',
+				data: {
+					action: 'wc_booking_get_slots',
+					nonce: pluginConfig.nonce,
+					product_id: $form.find('#product_id').val(),
+					date: normalizedDate,
+					resource_id: $form.find('#resource_id').val(),
+					mode: $form.find('#booking_mode').val()
+				}
+			}).done(function(response) {
+				var slots = (response && response.success && response.data && response.data.slots) ? response.data.slots : [];
+				WCBookingCalendar.populateTimeSlots($form, slots);
+				if (!slots.length) {
+					WCBookingCalendar.setAvailabilityStatus(
+						$form,
+						'unavailable',
+						(response && response.data && response.data.message) || ((pluginConfig.i18n && pluginConfig.i18n.no_slots) || 'No time slots available for this date.')
+					);
+				}
+			}).fail(function() {
+				WCBookingCalendar.populateTimeSlots($form, []);
+				WCBookingCalendar.setAvailabilityStatus(
+					$form,
+					'unavailable',
+					(pluginConfig.i18n && pluginConfig.i18n.error) || 'An error occurred. Please try again.'
+				);
+			}).always(function() {
+				$loading.hide();
+				$select.prop('disabled', $select.find('option').length <= 1 && !$select.val());
+			});
+		},
+
+		populateTimeSlots: function($form, slots) {
+			var $select = $form.find('#booking_time');
+			$select.empty();
+			if (!slots.length) {
+				$select.append('<option value="">' + ((pluginConfig.i18n && pluginConfig.i18n.no_slots) || 'No time slots available for this date.') + '</option>');
+				$select.prop('disabled', true);
+				return;
+			}
+			$select.append('<option value="">' + ((pluginConfig.i18n && pluginConfig.i18n.select_time) || 'Select a time slot') + '</option>');
+			$.each(slots, function(_, slot) {
+				var label = slot.name + ' (' + slot.start + ' - ' + slot.end + ')';
+				if (slot.available !== undefined) {
+					label += ' — ' + slot.available + ' spots';
+				}
+				$select.append('<option value="' + slot.start + '-' + slot.end + '">' + label + '</option>');
+			});
+			$select.prop('disabled', false).val('');
+		},
+
+		resetTimeSlots: function($form, noSlotsState) {
+			var $select = $form.find('#booking_time');
+			$select.empty();
+			if (noSlotsState) {
+				$select.append('<option value="">' + ((pluginConfig.i18n && pluginConfig.i18n.no_slots) || 'No time slots available for this date.') + '</option>');
+				$select.prop('disabled', true);
+				return;
+			}
+			$select.append('<option value="">' + ((pluginConfig.i18n && pluginConfig.i18n.select_time) || 'Select a time slot') + '</option>');
+			$select.prop('disabled', false);
+		},
+
+		calculatePrice: function($form) {
+			var personTypes = WCBookingCalendar.getPersonTypes($form);
+			if ($.isEmptyObject(personTypes)) {
+				WCBookingCalendar.updatePriceDisplay($form, { total: 0, due_today: 0 });
+				return;
+			}
+
+			$.ajax({
+				url: pluginConfig.ajax_url,
+				type: 'POST',
+				data: {
+					action: 'wc_booking_calculate_price',
+					nonce: pluginConfig.nonce,
+					product_id: $form.find('#product_id').val(),
+					person_types: personTypes,
+					date: normalizeDateString($form.find('#booking_date').val()),
+					mode: $form.find('#booking_mode').val(),
+					booking_addons: WCBookingCalendar.getSelectedAddons($form),
+					payment_option: $form.find('input[name="booking_payment_option"]:checked').val() || 'full'
+				}
+			}).done(function(response) {
+				if (response.success) {
+					WCBookingCalendar.updatePriceDisplay($form, response.data || {});
+				}
+			});
+		},
+
+		checkAvailability: function($form) {
+			var personTypes = WCBookingCalendar.getPersonTypes($form);
+			var dateValue = normalizeDateString($form.find('#booking_date').val());
+			var timeValue = $form.find('#booking_time').val();
+
+			if ($.isEmptyObject(personTypes) || !dateValue || !timeValue) {
+				WCBookingCalendar.clearAvailabilityStatus($form);
+				return;
+			}
+
+			if (WCBookingCalendar.isDateBlocked($form, dateValue)) {
+				WCBookingCalendar.setAvailabilityStatus(
+					$form,
+					'unavailable',
+					(pluginConfig.i18n && pluginConfig.i18n.unavailable) || 'Unavailable'
+				);
+				return;
+			}
+
+			WCBookingCalendar.setAvailabilityStatus(
+				$form,
+				'checking',
+				(pluginConfig.i18n && pluginConfig.i18n.checking) || 'Checking availability…'
+			);
+
+			$.ajax({
+				url: pluginConfig.ajax_url,
+				type: 'POST',
+				data: {
+					action: 'wc_booking_check_availability',
+					nonce: pluginConfig.nonce,
+					product_id: $form.find('#product_id').val(),
+					date: dateValue,
+					time: timeValue,
+					resource_id: $form.find('#resource_id').val(),
+					mode: $form.find('#booking_mode').val(),
+					person_types: personTypes
+				}
+			}).done(function(response) {
+				if (response.success) {
+					WCBookingCalendar.setAvailabilityStatus(
+						$form,
+						'available',
+						(pluginConfig.i18n && pluginConfig.i18n.available) || 'Available'
+					);
+				} else {
+					WCBookingCalendar.setAvailabilityStatus(
+						$form,
+						'unavailable',
+						(response.data && response.data.message) || ((pluginConfig.i18n && pluginConfig.i18n.unavailable) || 'Unavailable')
+					);
+				}
+			}).fail(function() {
+				WCBookingCalendar.setAvailabilityStatus(
+					$form,
+					'unavailable',
+					(pluginConfig.i18n && pluginConfig.i18n.error) || 'An error occurred. Please try again.'
+				);
+			});
+		},
+
+		setAvailabilityStatus: function($form, state, message) {
+			var $status = $form.find('.booking-availability-status');
+			$status.removeClass('available unavailable checking');
+			if (!message) {
+				$status.hide();
+				$status.find('.availability-message').text('');
+				return;
+			}
+			if (state) {
+				$status.addClass(state);
+			}
+			$status.find('.availability-message').text(message);
+			$status.show();
+		},
+
+		clearAvailabilityStatus: function($form) {
+			WCBookingCalendar.setAvailabilityStatus($form, '', '');
+		},
+
+		formatCurrency: function(amount) {
+			var symbol = pluginConfig.currency_symbol || '$';
+			return symbol + parseFloat(amount || 0).toFixed(2);
+		},
+
+		updatePriceDisplay: function($form, data) {
+			var total = parseFloat(data.total || 0);
+			var dueToday = parseFloat(data.due_today !== undefined ? data.due_today : total);
+			$form.find('#booking-total-price').text(data.total_formatted || WCBookingCalendar.formatCurrency(total));
+			$form.find('#booking-due-today').text(data.due_today_formatted || WCBookingCalendar.formatCurrency(dueToday));
+		},
+
+		validateForm: function($form) {
+			var errors = [];
+			var dateValue = normalizeDateString($form.find('#booking_date').val());
+			if (!dateValue) {
+				errors.push('Please select a date');
+			}
+			if (dateValue && WCBookingCalendar.isDateBlocked($form, dateValue)) {
+				errors.push('This date is unavailable');
+			}
+			if (!$form.find('#booking_time').val()) {
+				errors.push('Please select a time slot');
+			}
+			if ($.isEmptyObject(WCBookingCalendar.getPersonTypes($form))) {
+				errors.push('Please select at least one person');
+			}
+			if ($form.find('#resource_id').is('[required]') && !$form.find('#resource_id').val()) {
+				errors.push('Please select a guide/resource');
+			}
+			if (errors.length) {
+				alert(errors.join('\n'));
+				return false;
+			}
+			return true;
+		}
+	};
+
+	$(document).ready(function() {
+		WCBookingCalendar.init();
+	});
 })(jQuery);

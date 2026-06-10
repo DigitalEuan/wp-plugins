@@ -26,12 +26,22 @@ if ( ! class_exists( 'WC_Booking_Calendar_Product' ) ) {
 class WC_Product_Bookable_Tour extends WC_Product_Simple {
 
 	/**
+	 * Constructor.
+	 *
+	 * @param mixed $product Product ID or object.
+	 */
+	public function __construct( $product = 0 ) {
+		$this->product_type = WC_Booking_Calendar_Product::PRODUCT_TYPE;
+		parent::__construct( $product );
+	}
+
+	/**
 	 * Get internal type.
 	 *
 	 * @return string
 	 */
 	public function get_type() {
-		return WC_Booking_Calendar_Product::PRODUCT_TYPE;
+		return $this->product_type;
 	}
 
 	/**

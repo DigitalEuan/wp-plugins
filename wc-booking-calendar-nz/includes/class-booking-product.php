@@ -43,8 +43,7 @@ class WC_Booking_Calendar_Product {
 	private function __construct() {
 		add_filter( 'product_type_selector', array( $this, 'add_product_type' ) );
 		add_filter( 'woocommerce_product_class', array( $this, 'product_class' ), 10, 2 );
-		// Product class file loads on woocommerce_loaded so WC_Product_Simple exists.
-		add_action( 'woocommerce_loaded', array( $this, 'load_product_class' ), 5 );
+		$this->load_product_class();
 
 		// Admin tabs.
 		add_filter( 'woocommerce_product_data_tabs', array( $this, 'add_product_data_tabs' ) );

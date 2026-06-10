@@ -3,7 +3,7 @@
  * Plugin Name:       WC Booking Calendar NZ
  * Plugin URI:        https://digitaleuan.com
  * Description:       Advanced bookable products for WooCommerce with configurable time slots, resources, person types, conditional logic, and availability management. Built for New Zealand businesses.
- * Version:           1.1.1
+ * Version:           1.1.3
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            E Craig
@@ -23,12 +23,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin constants.
-define( 'WC_BOOKING_CALENDAR_VERSION', '1.1.1' );
+define( 'WC_BOOKING_CALENDAR_VERSION', '1.1.3' );
 define( 'WC_BOOKING_CALENDAR_PLUGIN_FILE', __FILE__ );
 define( 'WC_BOOKING_CALENDAR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WC_BOOKING_CALENDAR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'WC_BOOKING_CALENDAR_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
-define( 'WC_BOOKING_CALENDAR_DB_VERSION', '1.1.1' );
+define( 'WC_BOOKING_CALENDAR_DB_VERSION', '1.1.3' );
 
 /**
  * Main plugin bootstrap class.
@@ -166,6 +166,7 @@ final class WC_Booking_Calendar_NZ {
 		if ( version_compare( $installed, WC_BOOKING_CALENDAR_DB_VERSION, '<' ) ) {
 			$this->create_database_tables();
 			$this->set_default_options();
+			$this->migrate_settings();
 			update_option( 'wc_booking_calendar_db_version', WC_BOOKING_CALENDAR_DB_VERSION );
 		}
 	}
@@ -258,6 +259,50 @@ final class WC_Booking_Calendar_NZ {
 	}
 
 	/**
+	 * Migrate persisted settings to the current structure.
+	 *
+	 * @return void
+	 */
+	private function migrate_settings() {
+		$advanced = (array) get_option( 'wc_booking_calendar_advanced', array() );
+		$blackout = array_unique(
+			array_merge(
+				(array) get_option( 'wc_booking_calendar_blackout_dates', array() ),
+				isset( $advanced['blackout_dates'] ) ? (array) $advanced['blackout_dates'] : array()
+			)
+		);
+		update_option( 'wc_booking_calendar_blackout_dates', array_values( $blackout ) );
+
+		$advanced['blackout_dates'] = array_values( $blackout );
+		if ( isset( $advanced['seasonal_pricing'] ) ) {
+			unset( $advanced['seasonal_pricing'] );
+		}
+		update_option( 'wc_booking_calendar_advanced', $advanced );
+
+		if ( false === get_option( 'wc_booking_calendar_deposit_percentage', false ) ) {
+			add_option( 'wc_booking_calendar_deposit_percentage', 50 );
+		}
+
+		$addons = get_option( 'wc_booking_calendar_addons', false );
+		if ( false === $addons || ! is_array( $addons ) || empty( $addons ) ) {
+			$legacy_price = (float) get_option( 'wc_booking_calendar_morning_tea_price', 10 );
+			update_option(
+				'wc_booking_calendar_addons',
+				array(
+					array(
+						'id'         => 1,
+						'key'        => 'morning-tea',
+						'label'      => 'Morning Tea',
+						'price'      => $legacy_price,
+						'per_person' => 1,
+						'enabled'    => 1,
+					),
+				)
+			);
+		}
+	}
+
+	/**
 	 * Set default plugin options.
 	 *
 	 * @return void
@@ -292,6 +337,7 @@ final class WC_Booking_Calendar_NZ {
 			'wc_booking_calendar_booking_modes'     => array(
 				array(
 					'id'             => 1,
+					'key'            => 'guided',
 					'name'           => 'Guided Tour',
 					'description'    => 'Full-day guided experience',
 					'full_day_block' => 1,
@@ -300,6 +346,7 @@ final class WC_Booking_Calendar_NZ {
 				),
 				array(
 					'id'             => 2,
+					'key'            => 'self',
 					'name'           => 'Self-Directed Walk',
 					'description'    => 'Self-guided walk',
 					'full_day_block' => 0,
@@ -339,6 +386,17 @@ final class WC_Booking_Calendar_NZ {
 			'wc_booking_calendar_advance_days'      => 365,
 			'wc_booking_calendar_blackout_dates'    => array(),
 			'wc_booking_calendar_morning_tea_price' => 10,
+			'wc_booking_calendar_deposit_percentage' => 50,
+			'wc_booking_calendar_addons'            => array(
+				array(
+					'id'         => 1,
+					'key'        => 'morning-tea',
+					'label'      => 'Morning Tea',
+					'price'      => 10,
+					'per_person' => 1,
+					'enabled'    => 1,
+				),
+			),
 			'wc_booking_calendar_timezone'          => 'Pacific/Auckland',
 			'wc_booking_calendar_notifications'     => array(
 				'confirmation' => 1,
@@ -349,7 +407,6 @@ final class WC_Booking_Calendar_NZ {
 				'peak_days'        => array( 'Saturday', 'Sunday' ),
 				'peak_multiplier'  => 1.0,
 				'blackout_dates'   => array(),
-				'seasonal_pricing' => array(),
 			),
 		);
 
@@ -373,6 +430,7 @@ final class WC_Booking_Calendar_NZ {
 			'class-resource-cpt.php',
 			'class-booking-cpt.php',
 			'class-booking-product.php',
+			'class-wc-product-bookable-tour.php',
 			'class-frontend-handler.php',
 			'class-cart.php',
 			'class-order.php',

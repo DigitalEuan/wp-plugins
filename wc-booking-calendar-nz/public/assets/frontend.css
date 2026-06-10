@@ -1,535 +1,245 @@
-/**
- * WC Booking Calendar - Frontend Styles
- * Complete styling for booking form, date picker, and all frontend elements
- */
-
-/* ========================================
-   BASE STYLES & RESET
-   ======================================== */
-.wc-booking-calendar-frontend {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
-    line-height: 1.6;
-    color: #333;
-}
+/* WC Booking Calendar - Frontend Styles */
 
 .wc-booking-form {
-    background: #fff;
-    border: 1px solid #e2e2e2;
-    border-radius: 8px;
-    padding: 24px;
-    margin: 20px 0;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+	background: #fff;
+	border: 1px solid #e3e6ea;
+	border-radius: 12px;
+	padding: 24px;
+	margin: 24px 0;
+	box-shadow: 0 8px 24px rgba(16, 24, 40, 0.08);
 }
 
-/* ========================================
-   FORM LAYOUT
-   ======================================== */
-.wc-booking-form .form-row {
-    margin-bottom: 20px;
+.wc-booking-form .form-section {
+	margin-bottom: 24px;
+}
+
+.wc-booking-form .form-section-title {
+	font-size: 1.05rem;
+	font-weight: 700;
+	color: #102a43;
+	margin-bottom: 12px;
 }
 
 .wc-booking-form label {
-    display: block;
-    font-weight: 600;
-    margin-bottom: 8px;
-    color: #2c3e50;
+	display: block;
+	font-weight: 600;
+	margin-bottom: 8px;
+	color: #243b53;
 }
 
 .wc-booking-form input[type="text"],
 .wc-booking-form input[type="number"],
 .wc-booking-form select,
 .wc-booking-form textarea {
-    width: 100%;
-    padding: 12px 16px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    font-size: 16px;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+	width: 100%;
+	padding: 12px 14px;
+	border: 1px solid #cbd2d9;
+	border-radius: 8px;
+	font-size: 15px;
+	background: #fff;
 }
 
 .wc-booking-form input[type="text"]:focus,
 .wc-booking-form input[type="number"]:focus,
 .wc-booking-form select:focus,
 .wc-booking-form textarea:focus {
-    border-color: #0073aa;
-    box-shadow: 0 0 0 2px rgba(0, 115, 170, 0.1);
-    outline: none;
+	outline: none;
+	border-color: #2684ff;
+	box-shadow: 0 0 0 3px rgba(38, 132, 255, 0.12);
 }
 
-/* ========================================
-   DATE PICKER
-   ======================================== */
-.booking-date-picker {
-    margin-bottom: 20px;
+.booking-mode-description {
+	margin-top: 14px;
+	background: linear-gradient(135deg, #f8fbff 0%, #eef5ff 100%);
+	border: 1px solid #d9e7ff;
+	border-radius: 10px;
+	padding: 14px 16px;
+	color: #334e68;
 }
 
-.date-picker {
-    min-height: 44px;
-    cursor: pointer;
+.booking-mode-description__inner {
+	line-height: 1.6;
 }
 
-/* ========================================
-   TIME SLOTS
-   ======================================== */
-.booking-time-slots {
-    margin-bottom: 20px;
-    position: relative;
-}
-
-.booking-time-slots select {
-    appearance: none;
-    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23333' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-    background-repeat: no-repeat;
-    background-position: right 12px center;
-    background-size: 20px;
-    padding-right: 40px;
+.booking-date-picker,
+.booking-time-slots,
+.booking-resource {
+	margin-bottom: 18px;
 }
 
 .loading-slots {
-    margin-top: 8px;
-    padding: 8px 12px;
-    background: #f8f9fa;
-    border-radius: 4px;
-    color: #666;
-    font-size: 14px;
+	margin-top: 8px;
+	font-size: 14px;
+	color: #52606d;
 }
 
-.loading-slots span {
-    display: inline-block;
-    animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
-
-/* ========================================
-   PERSON TYPES
-   ======================================== */
 .booking-person-types {
-    margin-bottom: 24px;
-}
-
-.booking-person-types h3 {
-    margin-top: 0;
-    margin-bottom: 16px;
-    font-size: 18px;
-    color: #2c3e50;
+	display: grid;
+	gap: 12px;
 }
 
 .person-type-input {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    background: #f8f9fa;
-    border-radius: 6px;
-    margin-bottom: 12px;
-    transition: background 0.2s ease;
-}
-
-.person-type-input:hover {
-    background: #e9ecef;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 12px 14px;
+	background: #f8fafc;
+	border: 1px solid #e4e7eb;
+	border-radius: 10px;
 }
 
 .person-type-input label {
-    flex: 1;
-    margin-bottom: 0;
+	margin: 0;
+	flex: 1;
 }
 
 .person-type-input input[type="number"] {
-    width: 80px;
-    text-align: center;
-    margin-left: 16px;
+	width: 90px;
 }
 
-.person-type-input input[type="number"]:focus {
-    border-color: #0073aa;
+.age-range {
+	display: inline-block;
+	margin-left: 6px;
+	font-weight: 400;
+	font-size: 0.92em;
+	color: #61758a;
 }
 
-/* ========================================
-   RESOURCE SELECTION
-   ======================================== */
-.booking-resource {
-    margin-bottom: 20px;
+.booking-addons-list,
+.booking-payment-options {
+	display: grid;
+	gap: 12px;
 }
 
-.booking-resource select {
-    appearance: none;
-    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23333' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-    background-repeat: no-repeat;
-    background-position: right 12px center;
-    background-size: 20px;
-    padding-right: 40px;
+.booking-addon-option,
+.booking-payment-option {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 14px 16px;
+	border: 1px solid #d9e2ec;
+	border-radius: 10px;
+	background: #fff;
 }
 
-/* ========================================
-   LIMITED MOBILITY
-   ======================================== */
-.limited-mobility {
-    margin-bottom: 20px;
-    padding: 16px;
-    background: #fff3cd;
-    border: 1px solid #ffc107;
-    border-radius: 6px;
+.booking-addon-option input,
+.booking-payment-option input {
+	margin-right: 8px;
 }
 
-.limited-mobility label {
-    display: flex;
-    align-items: center;
-    cursor: pointer;
+.booking-addon-option__label {
+	flex: 1;
+	font-weight: 600;
+	color: #243b53;
 }
 
-.limited-mobility input[type="checkbox"] {
-    width: 20px;
-    height: 20px;
-    margin-right: 10px;
-    cursor: pointer;
+.booking-addon-option__price {
+	color: #486581;
+	font-size: 0.95rem;
+	white-space: nowrap;
 }
 
-.limited-mobility-message {
-    margin-top: 12px;
-    padding: 12px;
-    background: #fff;
-    border-left: 4px solid #ffc107;
-    border-radius: 4px;
-    font-size: 14px;
-    color: #856404;
+.limited-mobility-checkbox {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-top: 12px;
+	font-weight: 500;
 }
 
-/* ========================================
-   SPECIAL REQUESTS
-   ======================================== */
-.special-requests {
-    margin-bottom: 20px;
+.limited-mobility-checkbox input {
+	width: auto;
 }
 
-.special-requests textarea {
-    min-height: 80px;
-    resize: vertical;
-}
-
-/* ========================================
-   PRICE DISPLAY
-   ======================================== */
 .booking-price-display {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px 20px;
-    background: #f8f9fa;
-    border-radius: 6px;
-    margin-bottom: 20px;
-    border: 1px solid #e2e2e2;
+	display: flex;
+	justify-content: space-between;
+	gap: 20px;
+	align-items: center;
+	padding: 18px 20px;
+	border-radius: 12px;
+	background: #f8fafc;
+	border: 1px solid #e4e7eb;
 }
 
-.price-label {
-    font-weight: 600;
-    font-size: 16px;
-    color: #2c3e50;
+.price-label,
+.price-due-label {
+	font-weight: 600;
+	color: #486581;
+	margin-bottom: 4px;
 }
 
-.price-amount {
-    font-size: 24px;
-    font-weight: 700;
-    color: #0073aa;
+.price-amount,
+.price-due-amount {
+	font-size: 1.6rem;
+	font-weight: 700;
+	color: #102a43;
 }
 
-/* ========================================
-   ADD TO CART BUTTON
-   ======================================== */
+.booking-price-display__due {
+	text-align: right;
+}
+
 .booking-add-to-cart {
-    width: 100%;
-    padding: 16px 24px;
-    font-size: 18px;
-    font-weight: 600;
-    color: #fff;
-    background: #0073aa;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background 0.3s ease, transform 0.1s ease;
+	width: 100%;
+	padding: 16px 22px;
+	border: none;
+	border-radius: 10px;
+	background: #127fbf;
+	color: #fff;
+	font-size: 1.05rem;
+	font-weight: 700;
+	cursor: pointer;
+	transition: background 0.2s ease, transform 0.1s ease;
 }
 
 .booking-add-to-cart:hover {
-    background: #005a87;
+	background: #0f6da4;
 }
 
 .booking-add-to-cart:active {
-    transform: scale(0.98);
+	transform: translateY(1px);
 }
 
-.booking-add-to-cart:disabled {
-    background: #ccc;
-    cursor: not-allowed;
-    opacity: 0.7;
-}
-
-/* ========================================
-   CONFIRMATION MESSAGE
-   ======================================== */
-.booking-confirmation {
-    margin-top: 16px;
-    padding: 16px;
-    background: #d4edda;
-    border: 1px solid #c3e6cb;
-    border-radius: 6px;
-    color: #155724;
-}
-
-.booking-confirmation p.success {
-    margin: 0;
-    font-weight: 600;
-}
-
-/* ========================================
-   AVAILABILITY STATUS
-   ======================================== */
 .booking-availability-status {
-    display: inline-block;
-    padding: 6px 12px;
-    border-radius: 4px;
-    font-size: 14px;
-    font-weight: 600;
-    margin-left: 12px;
+	margin-top: 16px;
+	padding: 10px 14px;
+	border-radius: 8px;
+	font-weight: 600;
 }
 
 .booking-availability-status.available {
-    background: #d4edda;
-    color: #155724;
-    border: 1px solid #c3e6cb;
+	background: #ecfdf3;
+	border: 1px solid #abefc6;
+	color: #067647;
 }
 
 .booking-availability-status.unavailable {
-    background: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
+	background: #fef3f2;
+	border: 1px solid #fecdca;
+	color: #b42318;
 }
 
-/* ========================================
-   RESPONSIVE DESIGN
-   ======================================== */
-@media (max-width: 768px) {
-    .wc-booking-form {
-        padding: 16px;
-        margin: 10px 0;
-    }
-    
-    .person-type-input {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
-    .person-type-input input[type="number"] {
-        width: 100%;
-        margin-left: 0;
-        margin-top: 8px;
-    }
-    
-    .booking-price-display {
-        flex-direction: column;
-        gap: 12px;
-        text-align: center;
-    }
-    
-    .price-amount {
-        font-size: 20px;
-    }
-    
-    .booking-add-to-cart {
-        font-size: 16px;
-        padding: 14px 20px;
-    }
-}
+@media (max-width: 767px) {
+	.wc-booking-form {
+		padding: 18px;
+	}
 
-@media (max-width: 480px) {
-    .wc-booking-form {
-        padding: 12px;
-    }
-    
-    .person-type-input {
-        padding: 10px;
-    }
-    
-    .person-type-input label {
-        font-size: 14px;
-    }
-    
-    .price-amount {
-        font-size: 18px;
-    }
-}
+	.person-type-input,
+	.booking-addon-option,
+	.booking-payment-option,
+	.booking-price-display {
+		flex-direction: column;
+		align-items: flex-start;
+	}
 
-/* ========================================
-   LOADING STATES
-   ======================================== */
-.wc-booking-form.loading {
-    opacity: 0.7;
-    pointer-events: none;
-}
+	.person-type-input input[type="number"] {
+		width: 100%;
+	}
 
-/* ========================================
-   ERROR MESSAGES
-   ======================================== */
-.wc-booking-form .error-message {
-    color: #d63031;
-    font-size: 14px;
-    margin-top: 8px;
-    padding: 8px 12px;
-    background: #ffe0e0;
-    border-radius: 4px;
-}
-
-/* ========================================
-   SUCCESS MESSAGES
-   ======================================== */
-.wc-booking-form .success-message {
-    color: #00b894;
-    font-size: 14px;
-    margin-top: 8px;
-    padding: 8px 12px;
-    background: #d4edda;
-    border-radius: 4px;
-}
-
-/* ========================================
-   FORM SECTION DIVIDERS
-   ======================================== */
-.wc-booking-form .form-section {
-    margin-bottom: 24px;
-}
-
-.wc-booking-form .form-section-title {
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 16px;
-    padding-bottom: 8px;
-    border-bottom: 2px solid #0073aa;
-}
-
-/* ========================================
-   ACCESSIBILITY
-   ======================================== */
-.wc-booking-form label {
-    font-size: 16px;
-}
-
-.wc-booking-form input,
-.wc-booking-form select,
-.wc-booking-form textarea {
-    font-size: 16px;
-}
-
-/* Screen reader only */
-.sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-}
-
-/* ========================================
-   CALENDAR WIDGET SHORTCODE
-   ======================================== */
-.wc-booking-calendar-widget {
-    background: #fff;
-    border: 1px solid #e2e2e2;
-    border-radius: 8px;
-    padding: 24px;
-    margin: 20px 0;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.wc-booking-calendar-widget h3 {
-    margin-top: 0;
-    margin-bottom: 20px;
-    font-size: 24px;
-    color: #2c3e50;
-}
-
-/* ========================================
-   UTILITY CLASSES
-   ======================================== */
-.text-center {
-    text-align: center;
-}
-
-.mt-0 { margin-top: 0; }
-.mb-0 { margin-bottom: 0; }
-.mt-20 { margin-top: 20px; }
-.mb-20 { margin-bottom: 20px; }
-
-/* ========================================
-   CUSTOM SELECTORS FOR FUTURE EXTENSIONS
-   ======================================== */
-/* Booking calendar shortcode */
-.wc-booking-calendar-shortcode {
-    /* Add custom styles here */
-}
-
-/* Multi-location support */
-.booking-location {
-    margin-bottom: 20px;
-}
-
-/* Conditional logic visibility */
-.booking-form-field.hidden {
-    display: none;
-}
-
-/* Resource schedule display */
-.resource-schedule {
-    margin-top: 16px;
-    padding: 16px;
-    background: #f8f9fa;
-    border-radius: 6px;
-}
-
-.resource-schedule-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 8px 0;
-    border-bottom: 1px solid #e2e2e2;
-}
-
-.resource-schedule-item:last-child {
-    border-bottom: none;
-}
-
-/* ========================================
-   ANIMATIONS
-   ======================================== */
-@keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.slide-down {
-    animation: slideDown 0.3s ease;
-}
-
-/* ========================================
-   PRINT STYLES
-   ======================================== */
-@media print {
-    .wc-booking-form {
-        border: 1px solid #000;
-        box-shadow: none;
-    }
-    
-    .booking-add-to-cart {
-        display: none;
-    }
+	.booking-price-display__due {
+		text-align: left;
+	}
 }

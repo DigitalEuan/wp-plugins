@@ -53,6 +53,7 @@ class WC_Booking_Calendar_Frontend_Handler {
 
 		// Single product form.
 		add_action( 'woocommerce_before_add_to_cart_button', array( $this, 'render_booking_form_on_product' ), 5 );
+		add_action( 'woocommerce_' . WC_Booking_Calendar_Product::PRODUCT_TYPE . '_add_to_cart', array( $this, 'render_bookable_tour_add_to_cart' ) );
 
 		// AJAX (logged-in & guest).
 		$endpoints = array(
@@ -111,8 +112,22 @@ class WC_Booking_Calendar_Frontend_Handler {
 			array(
 				'ajax_url'        => admin_url( 'admin-ajax.php' ),
 				'nonce'           => wp_create_nonce( 'wc_booking_calendar' ),
-				'currency_symbol' => function_exists( 'get_woocommerce_currency_symbol' ) ? get_woocommerce_currency_symbol() : '$',
+				'currency_symbol' => function_exists( 'get_woocommerce_currency_symbol' ) ? html_entity_decode( get_woocommerce_currency_symbol() ) : '$',
 				'date_format'     => 'yy-mm-dd',
+				'blackout_dates'  => array_values(
+						array_filter(
+							array_unique(
+								array_map(
+									'sanitize_text_field',
+									array_merge(
+										(array) get_option( 'wc_booking_calendar_blackout_dates', array() ),
+										(array) ( (array) get_option( 'wc_booking_calendar_advanced', array() )['blackout_dates'] ?? array() )
+									)
+								)
+							)
+						)
+					),
+				'bookable_days'   => (array) get_option( 'wc_booking_calendar_days_of_week', array() ),
 				'i18n'            => array(
 					'select_date'      => __( 'Select a date', 'wc-booking-calendar-nz' ),
 					'select_time'      => __( 'Select a time slot', 'wc-booking-calendar-nz' ),
@@ -177,14 +192,37 @@ class WC_Booking_Calendar_Frontend_Handler {
 		$mode         = sanitize_text_field( wp_unslash( $_POST['booking_mode'] ?? 'self' ) );
 		$date         = sanitize_text_field( wp_unslash( $_POST['booking_date'] ?? '' ) );
 		$time         = sanitize_text_field( wp_unslash( $_POST['booking_time'] ?? '' ) );
-		$person_types = $this->sanitize_person_types( $_POST['person_types'] ?? array() );
-		$total_people = array_sum( $person_types );
+			$person_types = $this->sanitize_person_types( $_POST['person_types'] ?? array() );
+			$total_people = array_sum( $person_types );
 
-		// 2. Business Rule: Minimum Group Size for Guided Tours
-		if ( 'guided' === $mode && $total_people < 10 ) {
-			wc_add_notice( __( 'Guided tours require a minimum of 10 people.', 'wc-booking-calendar-nz' ), 'error' );
-			return false;
-		}
+			// 2. Business Rule: Minimum Group Size for Guided Tours
+			if ( 'guided' === $mode ) {
+				$paying_people_count = 0;
+				$all_types = get_option( 'wc_booking_calendar_person_types', array() );
+				$product = wc_get_product( $product_id );
+				$base_price = (float) $product->get_meta( '_booking_base_price' );
+				if ( $base_price <= 0 ) {
+					$base_price = (float) $product->get_price();
+				}
+
+				foreach ( $person_types as $type_id => $count ) {
+					$adjustment = 0.0;
+					foreach ( $all_types as $pt ) {
+						if ( (int) $pt['id'] === (int) $type_id ) {
+							$adjustment = (float) $pt['price'];
+							break;
+						}
+					}
+					if ( ( $base_price + $adjustment ) > 0 ) {
+						$paying_people_count += $count;
+					}
+				}
+
+				if ( $paying_people_count < 10 ) {
+					wc_add_notice( __( 'Guided tours require a minimum of 10 people with a value greater than $0.00.', 'wc-booking-calendar-nz' ), 'error' );
+					return false;
+				}
+			}
 
 		// 3. Business Rule: Required Fields
 		if ( empty( $date ) || empty( $time ) ) {
@@ -290,6 +328,29 @@ class WC_Booking_Calendar_Frontend_Handler {
 	}
 
 	/**
+	 * Render the add-to-cart area for the custom product type.
+	 *
+	 * WooCommerce does not automatically render a form for custom product
+	 * types unless they register their own *_add_to_cart action. Without
+	 * this, the single-product page shows the title/details but no booking UI.
+	 *
+	 * @return void
+	 */
+	public function render_bookable_tour_add_to_cart() {
+		global $product;
+		if ( ! $product || ! WC_Booking_Calendar_Product::is_booking_product( $product ) ) {
+			return;
+		}
+
+		$form_action = apply_filters( 'woocommerce_add_to_cart_form_action', $product->get_permalink() );
+
+		echo '<form class="cart wc-booking-calendar-cart" action="' . esc_url( $form_action ) . '" method="post" enctype="multipart/form-data">';
+		echo '<input type="hidden" name="quantity" value="1" />';
+		echo $this->get_booking_form_html( $product->get_id() ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		echo '</form>';
+	}
+
+	/**
 	 * Render booking form HTML.
 	 *
 	 * @param int $product_id Product ID.
@@ -310,13 +371,22 @@ class WC_Booking_Calendar_Frontend_Handler {
 		}
 
 		ob_start();
-		$person_types = get_option( 'wc_booking_calendar_person_types', array() );
-		$resources    = WC_Booking_Calendar_Resource_CPT::get_available_resources();
-		$booking_modes = get_option( 'wc_booking_calendar_booking_modes', array() );
-		$requires_resource = 'yes' === $product->get_meta( '_booking_requires_resource' );
-		$description       = $product->get_meta( '_booking_description' );
-		$min_advance_days  = (int) $product->get_meta( '_booking_min_advance_days' );
-		$max_advance_days  = (int) $product->get_meta( '_booking_max_advance_days' );
+		$person_types       = get_option( 'wc_booking_calendar_person_types', array() );
+		$resources          = WC_Booking_Calendar_Resource_CPT::get_available_resources();
+		$booking_modes      = get_option( 'wc_booking_calendar_booking_modes', array() );
+		$booking_addons     = array_values(
+			array_filter(
+				(array) get_option( 'wc_booking_calendar_addons', array() ),
+				static function( $addon ) {
+					return is_array( $addon ) && ! empty( $addon['label'] ) && ( ! array_key_exists( 'enabled', $addon ) || ! empty( $addon['enabled'] ) );
+				}
+			)
+		);
+		$deposit_percentage = (int) get_option( 'wc_booking_calendar_deposit_percentage', 50 );
+		$requires_resource  = 'yes' === $product->get_meta( '_booking_requires_resource' );
+		$description        = $product->get_meta( '_booking_description' );
+		$min_advance_days   = (int) $product->get_meta( '_booking_min_advance_days' );
+		$max_advance_days   = (int) $product->get_meta( '_booking_max_advance_days' );
 		if ( $min_advance_days <= 0 ) {
 			$min_advance_days = 1;
 		}
@@ -398,13 +468,14 @@ class WC_Booking_Calendar_Frontend_Handler {
 		$product_id  = isset( $_POST['product_id'] ) ? (int) $_POST['product_id'] : 0;
 		$date        = isset( $_POST['date'] ) ? sanitize_text_field( wp_unslash( $_POST['date'] ) ) : '';
 		$resource_id = isset( $_POST['resource_id'] ) ? (int) $_POST['resource_id'] : 0;
+		$mode        = isset( $_POST['mode'] ) ? sanitize_text_field( wp_unslash( $_POST['mode'] ) ) : '';
 
 		$availability = WC_Booking_Calendar_Availability_Manager::get_instance();
 		if ( ! $availability->validate_date( $date ) ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid date.', 'wc-booking-calendar-nz' ) ) );
 		}
 
-		$slots = $availability->get_available_slots( $product_id, $date, $resource_id );
+		$slots = $availability->get_available_slots( $product_id, $date, $resource_id, $mode );
 		wp_send_json_success( array( 'slots' => $slots ) );
 	}
 
@@ -416,13 +487,30 @@ class WC_Booking_Calendar_Frontend_Handler {
 	public function ajax_check_availability() {
 		$this->verify_ajax_nonce();
 
-		$product_id  = isset( $_POST['product_id'] ) ? (int) $_POST['product_id'] : 0;
-		$date        = isset( $_POST['date'] ) ? sanitize_text_field( wp_unslash( $_POST['date'] ) ) : '';
-		$time        = isset( $_POST['time'] ) ? sanitize_text_field( wp_unslash( $_POST['time'] ) ) : '';
-		$resource_id = isset( $_POST['resource_id'] ) ? (int) $_POST['resource_id'] : 0;
-		$mode        = isset( $_POST['mode'] ) ? sanitize_text_field( wp_unslash( $_POST['mode'] ) ) : '';
+		$product_id   = isset( $_POST['product_id'] ) ? (int) $_POST['product_id'] : 0;
+		$date         = isset( $_POST['date'] ) ? sanitize_text_field( wp_unslash( $_POST['date'] ) ) : '';
+		$time         = isset( $_POST['time'] ) ? sanitize_text_field( wp_unslash( $_POST['time'] ) ) : '';
+		$resource_id  = isset( $_POST['resource_id'] ) ? (int) $_POST['resource_id'] : 0;
+		$mode         = isset( $_POST['mode'] ) ? sanitize_text_field( wp_unslash( $_POST['mode'] ) ) : '';
 		$person_types = $this->sanitize_person_types( $_POST['person_types'] ?? array() );
+		if ( empty( $person_types ) && isset( $_POST['person_count'] ) ) {
+			$person_count = max( 0, (int) $_POST['person_count'] );
+			if ( $person_count > 0 ) {
+				$person_types = array( 1 => $person_count );
+			}
+		}
 
+			if ( function_exists( 'wc_booking_calendar_is_guided_mode' )
+				&& function_exists( 'wc_booking_calendar_get_paying_people_count' )
+				&& wc_booking_calendar_is_guided_mode( $mode )
+				&& wc_booking_calendar_get_paying_people_count( $product_id, $person_types ) < 10 ) {
+				wp_send_json_error(
+					array(
+						'code'    => 'guided_minimum_paying_people',
+						'message' => __( 'Guided tours require at least 10 people with a price greater than $0.00.', 'wc-booking-calendar-nz' ),
+					)
+				);
+			}
 		$availability = WC_Booking_Calendar_Availability_Manager::get_instance();
 		$result       = $availability->check_availability_with_person_types( $product_id, $date, $time, $person_types, $resource_id, $mode );
 
@@ -445,26 +533,26 @@ class WC_Booking_Calendar_Frontend_Handler {
 	public function ajax_calculate_price() {
 		$this->verify_ajax_nonce();
 
-		$product_id   = isset( $_POST['product_id'] ) ? (int) $_POST['product_id'] : 0;
-		$person_types = $this->sanitize_person_types( $_POST['person_types'] ?? array() );
-		$date         = isset( $_POST['date'] ) ? sanitize_text_field( wp_unslash( $_POST['date'] ) ) : '';
+		$product_id     = isset( $_POST['product_id'] ) ? (int) $_POST['product_id'] : 0;
+		$person_types   = $this->sanitize_person_types( $_POST['person_types'] ?? array() );
+		$date           = isset( $_POST['date'] ) ? sanitize_text_field( wp_unslash( $_POST['date'] ) ) : '';
+		$mode           = isset( $_POST['mode'] ) ? sanitize_text_field( wp_unslash( $_POST['mode'] ) ) : '';
+		$booking_addons = function_exists( 'wc_booking_calendar_sanitize_selected_addons' ) ? wc_booking_calendar_sanitize_selected_addons( $_POST['booking_addons'] ?? array() ) : array();
+		$payment_option = isset( $_POST['payment_option'] ) ? sanitize_text_field( wp_unslash( $_POST['payment_option'] ) ) : 'full';
 
-		$total = WC_Booking_Calendar_Product::calculate_price( $product_id, $person_types );
-
-		// Peak day multiplier.
-		$availability = WC_Booking_Calendar_Availability_Manager::get_instance();
-		if ( $date && $availability->validate_date( $date ) ) {
-			$rules = $availability->get_general_rules();
-			$day   = gmdate( 'l', strtotime( $date ) );
-			if ( in_array( $day, (array) $rules['peak_days'], true ) ) {
-				$total = round( $total * (float) $rules['peak_multiplier'], 2 );
-			}
-		}
+		$total = function_exists( 'wc_booking_calendar_calculate_booking_total' )
+			? wc_booking_calendar_calculate_booking_total( $product_id, $person_types, $date, $mode, $booking_addons )
+			: WC_Booking_Calendar_Product::calculate_price( $product_id, $person_types );
+		$due_today = function_exists( 'wc_booking_calendar_calculate_due_today' )
+			? wc_booking_calendar_calculate_due_today( $total, $payment_option )
+			: $total;
 
 		wp_send_json_success(
 			array(
-				'total'           => $total,
-				'total_formatted' => function_exists( 'wc_price' ) ? wp_strip_all_tags( wc_price( $total ) ) : (string) $total,
+				'total'               => $total,
+				'total_formatted'     => function_exists( 'wc_price' ) ? html_entity_decode( wp_strip_all_tags( wc_price( $total ) ) ) : (string) $total,
+				'due_today'           => $due_today,
+				'due_today_formatted' => function_exists( 'wc_price' ) ? html_entity_decode( wp_strip_all_tags( wc_price( $due_today ) ) ) : (string) $due_today,
 			)
 		);
 	}
