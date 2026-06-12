@@ -255,12 +255,10 @@ function wc_booking_calendar_calculate_booking_total( $product_id, array $person
 	$total        = WC_Booking_Calendar_Product::calculate_price( $product_id, $person_types );
 
 	if ( $total_people > 0 && wc_booking_calendar_mode_supports_addons( $mode ) ) {
-		$paying_people_count = wc_booking_calendar_get_paying_people_count( $product_id, $person_types );
-
 		foreach ( wc_booking_calendar_resolve_selected_addons( $selected_addons ) as $addon ) {
 			$addon_total = (float) $addon['price'];
 			if ( ! empty( $addon['per_person'] ) ) {
-				$addon_total *= $paying_people_count;
+				$addon_total *= $total_people;
 			}
 			$total += $addon_total;
 		}
@@ -268,9 +266,10 @@ function wc_booking_calendar_calculate_booking_total( $product_id, array $person
 
 	$availability = WC_Booking_Calendar_Availability_Manager::get_instance();
 	if ( $booking_date && $availability->validate_date( $booking_date ) ) {
-		$rules = $availability->get_general_rules();
-		$day   = gmdate( 'l', strtotime( $booking_date ) );
-		if ( in_array( $day, (array) $rules['peak_days'], true ) ) {
+		$rules        = $availability->get_general_rules();
+		$day          = strtolower( gmdate( 'l', strtotime( $booking_date ) ) );
+		$peak_days_lc = array_map( 'strtolower', (array) $rules['peak_days'] );
+		if ( in_array( $day, $peak_days_lc, true ) ) {
 			$total = round( $total * (float) $rules['peak_multiplier'], 2 );
 		}
 	}
@@ -323,6 +322,37 @@ function wc_booking_calendar_has_morning_tea( array $selected_addons ) {
 }
 
 /**
+ * Validate the guided-tour minimum requirement consistently.
+ *
+ * Guided tours require at least 10 selected people and a booking total above
+ * zero after pricing rules/add-ons are applied.
+ *
+ * @param int    $product_id      Product ID.
+ * @param string $mode            Selected booking mode.
+ * @param array  $person_types    Person counts.
+ * @param string $booking_date    Booking date.
+ * @param array  $selected_addons Selected add-ons.
+ * @return true|WP_Error
+ */
+function wc_booking_calendar_validate_guided_booking_requirements( $product_id, $mode, array $person_types, $booking_date = '', array $selected_addons = array() ) {
+	if ( ! wc_booking_calendar_is_guided_mode( $mode ) ) {
+		return true;
+	}
+
+	$paying_people = wc_booking_calendar_get_paying_people_count( $product_id, $person_types );
+	if ( $paying_people < 10 ) {
+		return new WP_Error( 'guided_minimum_paying_people', __( 'Guided tours require at least 10 people with a price greater than $0.00.', 'wc-booking-calendar-nz' ) );
+	}
+
+	$full_price = wc_booking_calendar_calculate_booking_total( $product_id, $person_types, $booking_date, $mode, $selected_addons );
+	if ( $full_price <= 0 ) {
+		return new WP_Error( 'guided_minimum_paying_people', __( 'Guided tours require at least 10 people with a price greater than $0.00.', 'wc-booking-calendar-nz' ) );
+	}
+
+	return true;
+}
+
+/**
  * Validate booking data when adding to cart.
  *
  * @param bool  $passed Current state.
@@ -358,8 +388,10 @@ function wc_booking_calendar_validate_add_to_cart( $passed, $product_id, $quanti
 		return false;
 	}
 
-	if ( wc_booking_calendar_is_guided_mode( $mode ) && wc_booking_calendar_get_paying_people_count( $product_id, $person_types ) < 10 ) {
-		wc_add_notice( __( 'Guided tours require at least 10 people with a price greater than $0.00.', 'wc-booking-calendar-nz' ), 'error' );
+	$selected_addons = wc_booking_calendar_sanitize_selected_addons( $_POST['booking_addons'] ?? array() );
+	$guided_requirement = wc_booking_calendar_validate_guided_booking_requirements( $product_id, $mode, $person_types, $date, $selected_addons );
+	if ( is_wp_error( $guided_requirement ) ) {
+		wc_add_notice( $guided_requirement->get_error_message(), 'error' );
 		return false;
 	}
 
@@ -370,7 +402,6 @@ function wc_booking_calendar_validate_add_to_cart( $passed, $product_id, $quanti
 		return false;
 	}
 
-	$selected_addons = wc_booking_calendar_sanitize_selected_addons( $_POST['booking_addons'] ?? array() );
 	$payment_option  = isset( $_POST['booking_payment_option'] ) && 'full' === sanitize_text_field( wp_unslash( $_POST['booking_payment_option'] ) ) ? 'full' : 'deposit';
 	$full_price      = wc_booking_calendar_calculate_booking_total( $product_id, $person_types, $date, $mode, $selected_addons );
 	$amount_due      = wc_booking_calendar_calculate_due_today( $full_price, $payment_option );
@@ -514,7 +545,7 @@ function wc_booking_calendar_apply_booking_price( $cart ) {
 		return;
 	}
 
-	foreach ( $cart->get_cart() as $cart_item ) {
+	foreach ( $cart->get_cart() as $cart_item_key => $cart_item ) {
 		if ( empty( $cart_item['booking_data'] ) || empty( $cart_item['data'] ) || ! is_object( $cart_item['data'] ) ) {
 			continue;
 		}
@@ -527,8 +558,8 @@ function wc_booking_calendar_apply_booking_price( $cart ) {
 			(array) ( $data['booking_addons'] ?? array() )
 		);
 		$due_today = wc_booking_calendar_calculate_due_today( $full, (string) ( $data['payment_option'] ?? 'full' ) );
-		$cart_item['booking_data']['booking_full_price'] = $full;
-		$cart_item['booking_data']['amount_due_today']   = $due_today;
+		$cart->cart_contents[ $cart_item_key ]['booking_data']['booking_full_price'] = $full;
+		$cart->cart_contents[ $cart_item_key ]['booking_data']['amount_due_today']   = $due_today;
 		if ( $full > 0 && $due_today > 0 ) {
 			$cart_item['data']->set_price( max( 0.01, (float) $due_today ) );
 		}

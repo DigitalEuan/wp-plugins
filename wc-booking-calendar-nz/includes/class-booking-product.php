@@ -345,27 +345,52 @@ class WC_Booking_Calendar_Product {
 		if ( ! $product ) {
 			return 0.0;
 		}
+
 		$base = (float) $product->get_meta( '_booking_base_price' );
 		if ( $base <= 0 ) {
 			$base = (float) $product->get_price();
 		}
 
-		$all_types = get_option( 'wc_booking_calendar_person_types', array() );
-		$total     = 0.0;
+		$total_people = 0;
+		foreach ( $person_types as $count ) {
+			$total_people += max( 0, (int) $count );
+		}
+		if ( $total_people <= 0 ) {
+			return 0.0;
+		}
+
+		$all_types       = (array) get_option( 'wc_booking_calendar_person_types', array() );
+		$has_type_config = ! empty( $all_types );
+		$adjustments     = array();
+		foreach ( $all_types as $pt ) {
+			$type_id = (int) ( $pt['id'] ?? 0 );
+			if ( $type_id > 0 ) {
+				$adjustments[ $type_id ] = (float) ( $pt['price'] ?? 0 );
+			}
+		}
+
+		/*
+		 * Reliable pricing rules:
+		 * - When person types are configured, treat the base price as the per-person base
+		 *   and apply each type's price adjustment to every selected person.
+		 * - When no person types are configured, fall back to the legacy flat booking
+		 *   price so older products keep working.
+		 */
+		if ( ! $has_type_config ) {
+			return round( max( 0, $base ), 2 );
+		}
+
+		$total = 0.0;
 		foreach ( $person_types as $type_id => $count ) {
 			$count = max( 0, (int) $count );
 			if ( $count <= 0 ) {
 				continue;
 			}
-			$adjustment = 0.0;
-			foreach ( $all_types as $pt ) {
-				if ( (int) $pt['id'] === (int) $type_id ) {
-					$adjustment = (float) $pt['price'];
-					break;
-				}
-			}
+
+			$adjustment = isset( $adjustments[ (int) $type_id ] ) ? (float) $adjustments[ (int) $type_id ] : 0.0;
 			$total += $count * max( 0, $base + $adjustment );
 		}
-		return round( $total, 2 );
+
+		return round( max( 0, $total ), 2 );
 	}
 }

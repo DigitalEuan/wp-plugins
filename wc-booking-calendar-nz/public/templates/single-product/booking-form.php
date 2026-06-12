@@ -214,7 +214,9 @@ $show_payment_options = $deposit_percentage > 0 && $deposit_percentage < 100;
 		</div>
 	</div>
 
-	<button type="submit" class="button booking-add-to-cart" id="booking-add-to-cart" name="add-to-cart" value="<?php echo esc_attr( $product->get_id() ); ?>"><?php esc_html_e( 'Book Now', 'wc-booking-calendar-nz' ); ?></button>
+	<div class="form-section booking-submit-section">
+		<button type="submit" class="button booking-add-to-cart" id="booking-add-to-cart" name="add-to-cart" value="<?php echo esc_attr( $product->get_id() ); ?>"><?php esc_html_e( 'Book Now', 'wc-booking-calendar-nz' ); ?></button>
+	</div>
 
 	<div class="booking-availability-status" style="display:none;"><span class="availability-message"></span></div>
 	<div id="booking-errors" class="error-message" style="display:none;"></div>

@@ -3,7 +3,7 @@
  * Plugin Name:       WC Booking Calendar NZ
  * Plugin URI:        https://digitaleuan.com
  * Description:       Advanced bookable products for WooCommerce with configurable time slots, resources, person types, conditional logic, and availability management. Built for New Zealand businesses.
- * Version:           1.1.3
+ * Version:           1.1.5
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            E Craig
@@ -23,12 +23,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin constants.
-define( 'WC_BOOKING_CALENDAR_VERSION', '1.1.3' );
+define( 'WC_BOOKING_CALENDAR_VERSION', '1.1.5' );
 define( 'WC_BOOKING_CALENDAR_PLUGIN_FILE', __FILE__ );
 define( 'WC_BOOKING_CALENDAR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WC_BOOKING_CALENDAR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'WC_BOOKING_CALENDAR_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
-define( 'WC_BOOKING_CALENDAR_DB_VERSION', '1.1.3' );
+define( 'WC_BOOKING_CALENDAR_DB_VERSION', '1.1.5' );
 
 /**
  * Main plugin bootstrap class.

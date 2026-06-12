@@ -105,6 +105,33 @@
     border: 2px solid #0073aa;
 }
 
+.calendar-day.blackout {
+    background: #111827;
+    color: #fff;
+}
+
+.calendar-day.blackout .day-number {
+    color: #fff;
+}
+
+.calendar-day.blackout .calendar-day-note {
+    margin-top: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #fbbf24;
+}
+
+.booking-admin-note.blackout-note {
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: #111827;
+    color: #fff;
+    font-weight: 600;
+}
+
 .calendar-day .day-number {
     font-weight: 700;
     font-size: 16px;

@@ -500,17 +500,18 @@ class WC_Booking_Calendar_Frontend_Handler {
 			}
 		}
 
-			if ( function_exists( 'wc_booking_calendar_is_guided_mode' )
-				&& function_exists( 'wc_booking_calendar_get_paying_people_count' )
-				&& wc_booking_calendar_is_guided_mode( $mode )
-				&& wc_booking_calendar_get_paying_people_count( $product_id, $person_types ) < 10 ) {
+		$booking_addons = function_exists( 'wc_booking_calendar_sanitize_selected_addons' ) ? wc_booking_calendar_sanitize_selected_addons( $_POST['booking_addons'] ?? array() ) : array();
+		if ( function_exists( 'wc_booking_calendar_validate_guided_booking_requirements' ) ) {
+			$guided_requirement = wc_booking_calendar_validate_guided_booking_requirements( $product_id, $mode, $person_types, $date, $booking_addons );
+			if ( is_wp_error( $guided_requirement ) ) {
 				wp_send_json_error(
 					array(
-						'code'    => 'guided_minimum_paying_people',
-						'message' => __( 'Guided tours require at least 10 people with a price greater than $0.00.', 'wc-booking-calendar-nz' ),
+						'code'    => $guided_requirement->get_error_code(),
+						'message' => $guided_requirement->get_error_message(),
 					)
 				);
 			}
+		}
 		$availability = WC_Booking_Calendar_Availability_Manager::get_instance();
 		$result       = $availability->check_availability_with_person_types( $product_id, $date, $time, $person_types, $resource_id, $mode );
 

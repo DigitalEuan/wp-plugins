@@ -379,7 +379,8 @@
 					time: timeValue,
 					resource_id: $form.find('#resource_id').val(),
 					mode: $form.find('#booking_mode').val(),
-					person_types: personTypes
+					person_types: personTypes,
+					booking_addons: WCBookingCalendar.getSelectedAddons($form)
 				}
 			}).done(function(response) {
 				if (response.success) {

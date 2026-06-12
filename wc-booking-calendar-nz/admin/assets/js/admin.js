@@ -13,6 +13,7 @@
          */
         currentMonth: new Date().getMonth(),
         currentYear: new Date().getFullYear(),
+        blackoutLookup: {},
         
         /**
          * Initialize plugin
@@ -33,6 +34,18 @@
          * Initialize calendar
          */
         initCalendar: function() {
+            var $app = $('#wc-booking-calendar-app');
+            if ($app.length) {
+                var initialMonth = parseInt($app.data('month'), 10);
+                var initialYear = parseInt($app.data('year'), 10);
+                if (!isNaN(initialMonth) && initialMonth >= 1 && initialMonth <= 12) {
+                    this.currentMonth = initialMonth - 1;
+                }
+                if (!isNaN(initialYear) && initialYear > 0) {
+                    this.currentYear = initialYear;
+                }
+            }
+            this.blackoutLookup = this.buildBlackoutLookup();
             this.renderCalendar();
         },
         
@@ -66,12 +79,20 @@
                             String(day).padStart(2, '0');
                 
                 var isToday = self.isToday(day, self.currentMonth, self.currentYear);
-                var dayClass = isToday ? 'calendar-day today' : 'calendar-day';
+                var isBlackout = self.isBlackoutDate(dateStr);
+                var dayClass = 'calendar-day';
+                if (isToday) {
+                    dayClass += ' today';
+                }
+                if (isBlackout) {
+                    dayClass += ' blackout';
+                }
                 
                 $('#calendar-days').append(
                     '<div class="' + dayClass + '" data-date="' + dateStr + '">' +
                     '<div class="day-number">' + day + '</div>' +
                     '<div class="booking-dots"></div>' +
+                    (isBlackout ? '<div class="calendar-day-note">' + wc_booking_calendar_admin.i18n.blackout_date + '</div>' : '') +
                     '</div>'
                 );
             }
@@ -125,6 +146,20 @@
                                         booking.product_name + ' - ' + booking.status + '"></span>');
                 }
             });
+        },
+
+        buildBlackoutLookup: function() {
+            var lookup = {};
+            (wc_booking_calendar_admin.blackout_dates || []).forEach(function(date) {
+                if (date) {
+                    lookup[String(date)] = true;
+                }
+            });
+            return lookup;
+        },
+
+        isBlackoutDate: function(date) {
+            return !!this.blackoutLookup[String(date || '')];
         },
         
         /**
@@ -182,6 +217,9 @@
             // Day click
             $(document).on('click', '.calendar-day', function() {
                 var date = $(this).data('date');
+                if (!date) {
+                    return;
+                }
                 self.showDayDetails(date);
             });
             
@@ -245,7 +283,7 @@
                 },
                 success: function(response) {
                     if (response.success) {
-                        self.renderBookingsList(response.data.bookings);
+                        self.renderBookingsList(response.data.bookings, date);
                     }
                 }
             });
@@ -254,10 +292,13 @@
         /**
          * Render bookings list
          */
-        renderBookingsList: function(bookings) {
+        renderBookingsList: function(bookings, date) {
             var $bookingsList = $('#bookings-list');
             $bookingsList.empty();
             
+            if (this.isBlackoutDate(date)) {
+                $bookingsList.append('<div class="booking-admin-note blackout-note">' + wc_booking_calendar_admin.i18n.blackout_date + '</div>');
+            }
             if (bookings.length === 0) {
                 $bookingsList.append('<p>' + wc_booking_calendar_admin.i18n.no_bookings + '</p>');
                 return;

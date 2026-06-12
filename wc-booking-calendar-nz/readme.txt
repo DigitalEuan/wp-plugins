@@ -1,5 +1,5 @@
 === WC Booking Calendar NZ ===
-Contributors: digitaleuan
+Contributors: E R A Craig, New Zealand - digitaleuan.com
 Tags: woocommerce, booking, calendar, tours, resources, availability
 Requires at least: 6.0
 Tested up to: 6.6
@@ -78,6 +78,14 @@ availability and pricing logic. Run:
     composer test
 
 == Changelog ==
+
+11.06.26
+
+1. Guided tours minimum 10 people with price > $0.00	Validation now uses the paying people count consistently, not just raw headcount
+2. Deposit / full amount toggle wrong	Due-today calculation now works from the corrected full booking total
+3. Booking Total broken	Pricing now correctly treats configured person types as per-person pricing using base price + type adjustment
+4. Book Now button on edge	Frontend template/CSS keeps the button inside the form section
+5. Admin Calendar blackout dates missing	Admin JS now receives blackout dates from saved settings and renders them in calendar/day details
 
 10.06.26
 

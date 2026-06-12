@@ -109,9 +109,22 @@ class WC_Booking_Calendar_Admin {
 			'wc-booking-calendar-admin',
 			'wc_booking_calendar_admin',
 			array(
-				'ajax_url' => admin_url( 'admin-ajax.php' ),
-				'nonce'    => wp_create_nonce( 'wc_booking_calendar_admin' ),
-				'i18n'     => array(
+				'ajax_url'       => admin_url( 'admin-ajax.php' ),
+				'nonce'          => wp_create_nonce( 'wc_booking_calendar_admin' ),
+				'blackout_dates' => array_values(
+					array_filter(
+						array_unique(
+							array_map(
+								'sanitize_text_field',
+								array_merge(
+									(array) get_option( 'wc_booking_calendar_blackout_dates', array() ),
+									(array) ( (array) get_option( 'wc_booking_calendar_advanced', array() )['blackout_dates'] ?? array() )
+								)
+							)
+						)
+					)
+				),
+				'i18n'           => array(
 					'confirm_status_change' => __( 'Are you sure you want to change this booking’s status?', 'wc-booking-calendar-nz' ),
 					'confirm_delete'        => __( 'Permanently delete this booking? This cannot be undone.', 'wc-booking-calendar-nz' ),
 					'no_bookings'           => __( 'No bookings for this day.', 'wc-booking-calendar-nz' ),
@@ -127,6 +140,7 @@ class WC_Booking_Calendar_Admin {
 					'delete'                => __( 'Delete', 'wc-booking-calendar-nz' ),
 					'status_updated'        => __( 'Booking status updated.', 'wc-booking-calendar-nz' ),
 					'booking_deleted'       => __( 'Booking deleted.', 'wc-booking-calendar-nz' ),
+					'blackout_date'         => __( 'Blackout date', 'wc-booking-calendar-nz' ),
 				),
 			)
 		);

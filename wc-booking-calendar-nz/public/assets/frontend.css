@@ -182,8 +182,15 @@
 	text-align: right;
 }
 
+.booking-submit-section {
+	margin-bottom: 0;
+}
+
 .booking-add-to-cart {
+	display: block;
 	width: 100%;
+	box-sizing: border-box;
+	margin: 0;
 	padding: 16px 22px;
 	border: none;
 	border-radius: 10px;
